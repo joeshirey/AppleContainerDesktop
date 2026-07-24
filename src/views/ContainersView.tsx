@@ -9,7 +9,7 @@ export function ContainersView() {
   const { containers, error, loading, refresh } = useContainers();
   const [selected, setSelected] = useState<Container | null>(null);
   const [filter, setFilter] = useState("");
-  const [showRun, setShowRun] = useState(false);
+  const [_showRun, setShowRun] = useState(false);
 
   const filtered = useMemo(() => {
     const q = filter.toLowerCase();
