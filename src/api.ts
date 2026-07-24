@@ -52,7 +52,7 @@ export const getStats = (id: string): Promise<ContainerStats> => invoke("get_sta
 export const inspectContainer = (id: string): Promise<Record<string, unknown>> => invoke("inspect_container", { id });
 export const runContainer = (opts: {
   image: string; name?: string; ports?: string[]; env?: string[];
-  cpus?: number; memory?: string; detach: boolean;
+  cpus?: number; memory?: string; hostname?: string; detach: boolean;
 }): Promise<void> => invoke("run_container", { opts });
 export const listImages = (): Promise<Image[]> =>
   invoke<any[]>("list_images").then(arr => (arr ?? []).map(normalizeImage));

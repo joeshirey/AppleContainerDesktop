@@ -151,6 +151,9 @@ pub fn run_container(opts: Value) -> Result<(), String> {
     if let Some(n) = opts.get("name").and_then(|v| v.as_str()) {
         args.extend_from_slice(&["--name".to_string(), n.to_string()]);
     }
+    if let Some(h) = opts.get("hostname").and_then(|v| v.as_str()) {
+        args.extend_from_slice(&["--hostname".to_string(), h.to_string()]);
+    }
     if let Some(c) = opts.get("cpus").and_then(|v| v.as_u64()) {
         args.extend_from_slice(&["--cpus".to_string(), c.to_string()]);
     }

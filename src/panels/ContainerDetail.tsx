@@ -3,6 +3,7 @@ import type { Container, ContainerStats } from "../types";
 import { getStats, stopContainer, startContainer, removeContainer } from "../api";
 import { LogsPanel } from "./LogsPanel";
 import { ExecPanel } from "./ExecPanel";
+import { ContainerSettings } from "./ContainerSettings";
 import styles from "./ContainerDetail.module.css";
 
 type Tab = "info" | "logs" | "exec" | "settings";
@@ -63,7 +64,7 @@ export function ContainerDetail({ container, onAction, onRemove }: { container: 
         ))}
       </div>
 
-      <div className={styles.body}>
+      <div className={tab === "settings" ? styles.settingsBody : styles.body}>
         {tab === "info" && (
           <div className={styles.infoTab}>
             {isRunning && stats && (
@@ -82,12 +83,7 @@ export function ContainerDetail({ container, onAction, onRemove }: { container: 
         )}
         {tab === "logs" && <LogsPanel containerId={container.id} />}
         {tab === "exec" && <ExecPanel containerId={container.id} />}
-        {tab === "settings" && (
-          <div className={styles.grid}>
-            <Card label="Image" value={container.image} />
-            {container.ports && <Card label="Ports" value={container.ports} mono />}
-          </div>
-        )}
+        {tab === "settings" && <ContainerSettings container={container} />}
       </div>
     </div>
   );
