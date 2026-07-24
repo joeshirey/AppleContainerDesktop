@@ -49,7 +49,11 @@ pub fn run_cmd(args: &[&str]) -> Result<Value, CmdError> {
     let stdout = String::from_utf8_lossy(&out.stdout);
     let trimmed = stdout.trim();
     if trimmed.is_empty() {
-        return Ok(Value::Array(vec![]));
+        return if needs_json {
+            Ok(Value::Array(vec![]))
+        } else {
+            Ok(Value::String(String::new()))
+        };
     }
 
     if needs_json {
