@@ -55,7 +55,7 @@ export function ContainersView() {
       {showRun && (
         <RunModal
           onClose={() => setShowRun(false)}
-          onRun={() => { refresh(); setShowRun(false); }}
+          onRun={refresh}
         />
       )}
     </div>

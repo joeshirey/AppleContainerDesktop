@@ -2,6 +2,9 @@ import { useState } from "react";
 import { runContainer } from "../api";
 import styles from "./RunModal.module.css";
 
+const csvList = (s: string): string[] | undefined =>
+  s ? s.split(",").map(t => t.trim()) : undefined;
+
 export function RunModal({ onClose, onRun, defaultImage = "" }: { onClose: () => void; onRun: () => void; defaultImage?: string }) {
   const [image, setImage] = useState(defaultImage);
   const [name, setName]   = useState("");
@@ -19,8 +22,8 @@ export function RunModal({ onClose, onRun, defaultImage = "" }: { onClose: () =>
       await runContainer({
         image, detach,
         name: name || undefined,
-        ports: ports ? ports.split(",").map(s => s.trim()) : undefined,
-        env:   env   ? env.split(",").map(s => s.trim())   : undefined,
+        ports: csvList(ports),
+        env:   csvList(env),
         cpus:  cpus  ? Number(cpus) : undefined,
         memory: mem  || undefined,
       });
