@@ -1,8 +1,9 @@
 .root { display: flex; flex-direction: column; flex: 1; height: 100%; }
 .term { flex: 1; overflow-y: auto; background: #1c1c1e; border-radius: 8px; padding: 12px; margin-bottom: 10px; font-family: "SF Mono","Menlo",monospace; font-size: 0.72rem; line-height: 1.5; }
 .hint { color: #636366; }
-.out { color: #e5e5ea; white-space: pre-wrap; word-break: break-all; margin: 0 0 8px; }
-.err { color: #ff453a; white-space: pre-wrap; word-break: break-all; margin: 0 0 8px; }
+.out, .err { white-space: pre-wrap; word-break: break-all; margin: 0 0 8px; }
+.out { color: #e5e5ea; }
+.err { color: #ff453a; }
 .row { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .prompt { font-family: "SF Mono","Menlo",monospace; font-size: 0.85rem; color: var(--gray); }
 .input { flex: 1; height: 32px; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 0 10px; font-family: "SF Mono","Menlo",monospace; font-size: 0.78rem; outline: none; }
