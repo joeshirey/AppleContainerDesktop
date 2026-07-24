@@ -101,10 +101,7 @@ pub fn get_logs(id: String, lines: u32) -> Result<String, String> {
 
 #[tauri::command]
 pub fn exec_in_container(id: String, command: String) -> Result<String, String> {
-    // Splits on whitespace — arguments with spaces are not supported in v1
-    let parts: Vec<&str> = command.split_whitespace().collect();
-    let mut args = vec!["exec", id.as_str()];
-    args.extend_from_slice(&parts);
+    let args = vec!["exec", id.as_str(), "/bin/sh", "-c", command.as_str()];
     run_cmd(&args)
         .map(|v| match &v {
             Value::Object(m) => m

@@ -25,7 +25,7 @@ export function ExecPanel({ containerId }: { containerId: string }) {
   return (
     <div className={styles.root}>
       <div className={styles.term}>
-        {entries.length === 0 && <span className={styles.hint}>Run a command inside the container.</span>}
+        {entries.length === 0 && <span className={styles.hint}>Run a command inside the container. Each command runs independently — chain with <code>&amp;&amp;</code> for multi-step operations.</span>}
         {entries.map((entry, i) => (
           <pre key={i} className={entry.isError ? styles.err : styles.out}>{entry.text}</pre>
         ))}
@@ -36,7 +36,7 @@ export function ExecPanel({ containerId }: { containerId: string }) {
           className={styles.input}
           value={cmd}
           onChange={e => setCmd(e.target.value)}
-          placeholder="Type a command..."
+          placeholder="e.g. ls /app or cd /tmp && cat file.txt"
           disabled={busy}
         />
         <button className={styles.btn} type="submit" disabled={busy || !cmd.trim()}>Run</button>
