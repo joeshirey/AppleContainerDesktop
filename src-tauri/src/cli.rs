@@ -39,9 +39,14 @@ pub fn run_cmd(args: &[&str]) -> Result<Value, CmdError> {
         return Ok(Value::Array(vec![]));
     }
 
-    serde_json::from_str(trimmed).map_err(|e| CmdError {
-        message: format!("JSON parse error: {e}"),
-    })
+    if needs_json {
+        serde_json::from_str(trimmed).map_err(|e| CmdError {
+            message: format!("JSON parse error: {e}"),
+        })
+    } else {
+        Ok(serde_json::from_str(trimmed)
+            .unwrap_or_else(|_| Value::String(trimmed.to_string())))
+    }
 }
 
 #[cfg(test)]
