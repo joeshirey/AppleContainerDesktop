@@ -2,6 +2,7 @@ import { useState, useMemo } from "react";
 import { useContainers } from "../hooks/useContainers";
 import { StatusDot } from "../components/StatusDot";
 import { ContainerDetail } from "../panels/ContainerDetail";
+import { RunModal } from "../panels/RunModal";
 import type { Container } from "../types";
 import styles from "./ContainersView.module.css";
 
@@ -9,7 +10,7 @@ export function ContainersView() {
   const { containers, error, loading, refresh } = useContainers();
   const [selected, setSelected] = useState<Container | null>(null);
   const [filter, setFilter] = useState("");
-  const [_showRun, setShowRun] = useState(false);
+  const [showRun, setShowRun] = useState(false);
 
   const filtered = useMemo(() => {
     const q = filter.toLowerCase();
@@ -51,6 +52,12 @@ export function ContainersView() {
           ? <ContainerDetail container={selected} onAction={refresh} />
           : <div className={styles.emptyDetail}>Select a container</div>}
       </div>
+      {showRun && (
+        <RunModal
+          onClose={() => setShowRun(false)}
+          onRun={() => { refresh(); setShowRun(false); }}
+        />
+      )}
     </div>
   );
 }
