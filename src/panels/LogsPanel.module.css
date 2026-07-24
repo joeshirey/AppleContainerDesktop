@@ -1,0 +1,6 @@
+.root { display: flex; flex-direction: column; flex: 1; height: 100%; }
+.bar { display: flex; align-items: center; gap: 12px; padding: 8px 0 10px; flex-shrink: 0; }
+.follow { display: flex; align-items: center; gap: 6px; font-size: 0.78rem; color: #3c3c43; cursor: pointer; }
+.sel { font-size: 0.75rem; padding: 3px 6px; border-radius: 5px; border: 1px solid var(--border); background: var(--surface); outline: none; }
+.out { flex: 1; overflow-y: auto; background: #1c1c1e; border-radius: 8px; padding: 12px; }
+.out pre { font-family: "SF Mono","Menlo",monospace; font-size: 0.72rem; color: #e5e5ea; white-space: pre-wrap; word-break: break-all; line-height: 1.5; }
