@@ -58,7 +58,17 @@ pub fn exec_in_container(id: String, command: String) -> Result<String, String> 
 
 #[tauri::command]
 pub fn get_stats(id: String) -> Result<Value, String> {
-    run_cmd(&["stats", "--no-stream", &id]).map_err(|e| e.message)
+    let raw = run_cmd(&["stats", "--no-stream", &id]).map_err(|e| e.message)?;
+    // The CLI returns a JSON array; find the entry matching the requested id
+    // or fall back to the first element.
+    if let Some(arr) = raw.as_array() {
+        let entry = arr
+            .iter()
+            .find(|v| v.get("id").and_then(|s| s.as_str()) == Some(id.as_str()))
+            .or_else(|| arr.first());
+        return Ok(entry.cloned().unwrap_or(Value::Null));
+    }
+    Ok(raw)
 }
 
 #[tauri::command]

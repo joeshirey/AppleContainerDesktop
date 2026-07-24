@@ -32,7 +32,7 @@ describe("ContainerDetail", () => {
   });
 
   it("fetches stats on mount for running container", async () => {
-    mock.mockResolvedValue({ cpu_percent: 0.2, memory_usage: "48 MB" });
+    mock.mockResolvedValue({ cpu: "0.5%", memory: "48 MB" });
     render(<ContainerDetail container={running} onAction={() => {}} />);
     await waitFor(() => expect(mock).toHaveBeenCalledWith("get_stats", { id: "abc" }));
   });

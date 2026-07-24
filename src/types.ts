@@ -8,9 +8,9 @@ export interface Container {
 }
 
 export interface ContainerStats {
-  cpu_percent?: number;
-  memory_usage?: string;
-  cpus?: number;
+  id?: string;
+  cpu?: string;
+  memory?: string;
 }
 
 export interface Image {

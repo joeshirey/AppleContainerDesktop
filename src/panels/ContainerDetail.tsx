@@ -68,9 +68,8 @@ export function ContainerDetail({ container, onAction, onRemove }: { container: 
           <div className={styles.infoTab}>
             {isRunning && stats && (
               <div className={styles.statsRow}>
-                <Stat label="CPU" value={`${stats.cpu_percent?.toFixed(1) ?? "—"}%`} />
-                <Stat label="Memory" value={stats.memory_usage ?? "—"} />
-                <Stat label="CPUs" value={String(stats.cpus ?? "—")} />
+                <Stat label="CPU" value={stats.cpu ?? "—"} />
+                <Stat label="Memory" value={stats.memory ?? "—"} />
               </div>
             )}
             <div className={styles.grid}>
