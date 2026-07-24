@@ -1,6 +1,41 @@
 use crate::cli::run_cmd;
 use serde_json::Value;
 
+#[tauri::command]
+pub async fn search_hub(query: String) -> Result<Value, String> {
+    let client = reqwest::Client::new();
+    client
+        .get("https://hub.docker.com/v2/search/repositories/")
+        .query(&[("query", query.as_str()), ("page_size", "20")])
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json::<Value>()
+        .await
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub async fn get_hub_tags(name: String) -> Result<Value, String> {
+    let repo_path = if name.contains('/') {
+        name.clone()
+    } else {
+        format!("library/{}", name)
+    };
+    let client = reqwest::Client::new();
+    client
+        .get(format!("https://hub.docker.com/v2/repositories/{}/tags/", repo_path))
+        .query(&[("page_size", "5")])
+        .header("Accept", "application/json")
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json::<Value>()
+        .await
+        .map_err(|e| e.to_string())
+}
+
 fn bind_mounts_exist(container: &Value) -> bool {
     let mounts = container
         .get("configuration")

@@ -5,13 +5,14 @@ import { HubSearchView } from "../../views/HubSearchView";
 
 vi.mock("../../api", () => ({
   pullImage: vi.fn(),
+  searchHub: vi.fn(),
+  getHubTags: vi.fn(),
 }));
 
-const mockFetch = vi.fn();
-vi.stubGlobal("fetch", mockFetch);
-
-import { pullImage } from "../../api";
+import { pullImage, searchHub, getHubTags } from "../../api";
 const mockPull = vi.mocked(pullImage);
+const mockSearch = vi.mocked(searchHub);
+const mockTags = vi.mocked(getHubTags);
 
 const SEARCH_RESPONSE = {
   results: [
@@ -26,10 +27,8 @@ describe("HubSearchView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mockPull.mockResolvedValue(undefined);
-    mockFetch.mockImplementation((url: string) => {
-      if (url.includes("search")) return Promise.resolve({ ok: true, json: () => Promise.resolve(SEARCH_RESPONSE) });
-      return Promise.resolve({ ok: true, json: () => Promise.resolve(TAGS_RESPONSE) });
-    });
+    mockSearch.mockResolvedValue(SEARCH_RESPONSE);
+    mockTags.mockResolvedValue(TAGS_RESPONSE);
   });
 
   it("renders search input and Search button", () => {
@@ -48,7 +47,7 @@ describe("HubSearchView", () => {
   });
 
   it("shows empty state when no results", async () => {
-    mockFetch.mockResolvedValueOnce({ ok: true, json: () => Promise.resolve({ results: [] }) });
+    mockSearch.mockResolvedValueOnce({ results: [] });
     render(<HubSearchView />);
     await userEvent.type(screen.getByPlaceholderText(/search docker hub/i), "xyzzy");
     await userEvent.click(screen.getByRole("button", { name: /search/i }));
@@ -67,6 +66,6 @@ describe("HubSearchView", () => {
   it("submits search on Enter key", async () => {
     render(<HubSearchView />);
     await userEvent.type(screen.getByPlaceholderText(/search docker hub/i), "nginx{Enter}");
-    await waitFor(() => expect(mockFetch).toHaveBeenCalled());
+    await waitFor(() => expect(mockSearch).toHaveBeenCalled());
   });
 });

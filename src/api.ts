@@ -83,3 +83,7 @@ export const setDefaultMachine = (name: string): Promise<void> => invoke("set_de
 export const checkSystemStatus = (): Promise<{ status: string }> => invoke("check_system_status");
 export const startSystem = (): Promise<void> => invoke("start_system");
 export const stopSystem = (): Promise<void> => invoke("stop_system");
+export const searchHub = (query: string): Promise<{ results: any[] }> =>
+  invoke("search_hub", { query });
+export const getHubTags = (name: string): Promise<{ results: { name: string }[] }> =>
+  invoke("get_hub_tags", { name });

@@ -31,6 +31,8 @@ pub fn run() {
             stop_machine,
             delete_machine,
             set_default_machine,
+            search_hub,
+            get_hub_tags,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

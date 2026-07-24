@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { pullImage } from "../api";
+import { pullImage, searchHub, getHubTags } from "../api";
 import styles from "./HubSearchView.module.css";
 
 interface HubResult {
@@ -29,11 +29,8 @@ export function HubSearchView() {
 
   async function fetchTags(name: string): Promise<string[]> {
     try {
-      const repoPath = name.includes("/") ? name : `library/${name}`;
-      const res = await fetch(`https://hub.docker.com/v2/repositories/${repoPath}/tags/?page_size=3`);
-      if (!res.ok) return [];
-      const data = await res.json();
-      return (data.results ?? []).map((t: any) => t.name as string);
+      const data = await getHubTags(name);
+      return (data.results ?? []).map(t => t.name);
     } catch {
       return [];
     }
@@ -47,11 +44,7 @@ export function HubSearchView() {
     setPullError(null);
     setPullSuccess(null);
     try {
-      const res = await fetch(
-        `https://hub.docker.com/v2/search/repositories/?query=${encodeURIComponent(query.trim())}&page_size=20`
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
+      const data = await searchHub(query.trim());
       const raw: any[] = data.results ?? [];
       const withTags = await Promise.all(
         raw.map(async (r) => ({
