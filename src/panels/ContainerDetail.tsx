@@ -21,6 +21,8 @@ export function ContainerDetail({ container, onAction }: { container: Container;
     return () => { live = false; };
   }, [container.id, tab, isRunning]);
 
+  useEffect(() => { setConfirmRemove(false); }, [container.id]);
+
   async function act(fn: () => Promise<void>) {
     try { await fn(); setErr(null); onAction?.(); }
     catch (e) { setErr(e instanceof Error ? e.message : String(e)); }

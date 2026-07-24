@@ -6,5 +6,5 @@ body {
 }
 :root {
   --blue: #007aff; --green: #34c759; --red: #ff3b30; --gray: #8e8e93;
-  --border: rgba(0,0,0,0.08); --surface: #ffffff; --bg: #f9f9fb;
+  --border: rgba(0,0,0,0.08); --surface: #ffffff; --bg: #f9f9fb; --fg: #1c1c1e;
 }
