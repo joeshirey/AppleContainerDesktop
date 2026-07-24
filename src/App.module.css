@@ -1,2 +1,3 @@
-.app { display: flex; height: 100vh; overflow: hidden; }
+.app  { display: flex; height: 100vh; overflow: hidden; }
+.body { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .main { flex: 1; overflow: hidden; display: flex; flex-direction: column; }

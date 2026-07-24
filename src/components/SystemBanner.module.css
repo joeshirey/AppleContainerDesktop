@@ -1,0 +1,2 @@
+.banner { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px; background: #fff3cd; border-bottom: 1px solid rgba(255,159,10,0.3); font-size: 0.82rem; color: #5c3d00; flex-shrink: 0; }
+.btn { height: 26px; padding: 0 12px; background: #ff9f0a; color: white; border: none; border-radius: 6px; font-size: 0.72rem; font-weight: 600; cursor: pointer; }
