@@ -1,0 +1,29 @@
+.root { display: flex; height: 100%; overflow: hidden; }
+.list { width: 240px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; overflow-y: auto; }
+.toolbar { padding: 10px 12px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+.toolbarTitle { font-size: 0.85rem; font-weight: 600; color: var(--fg); flex: 1; }
+.btnPrimary { height: 26px; padding: 0 10px; background: var(--blue); color: white; border: none; border-radius: 6px; font-size: 0.72rem; font-weight: 600; cursor: pointer; }
+.msg { padding: 16px 12px; font-size: 0.78rem; color: var(--gray); text-align: center; }
+.errMsg { padding: 8px 12px; font-size: 0.75rem; color: var(--red); background: var(--red-tint-bg); }
+.row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: none; background: none; cursor: pointer; text-align: left; width: 100%; border-bottom: 1px solid var(--border); }
+.row:hover { background: var(--bg); }
+.selected { background: var(--blue) !important; }
+.selected .rowName { color: white; }
+.selected .defaultPill { background: rgba(255,255,255,0.2); color: white; }
+.dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.dotRunning { background: var(--green); }
+.dotStopped { background: var(--gray); }
+.rowInfo { flex: 1; display: flex; align-items: center; gap: 6px; }
+.rowName { font-size: 0.82rem; font-weight: 500; color: var(--fg); }
+.defaultPill { font-size: 0.62rem; background: var(--green-tint-bg); color: var(--green-tint-text); padding: 1px 6px; border-radius: 8px; font-weight: 600; }
+.detail { flex: 1; overflow: hidden; display: flex; flex-direction: column; background: var(--bg); }
+.placeholder { padding: 48px; text-align: center; color: var(--gray); font-size: 0.85rem; }
+.createForm { padding: 24px; display: flex; flex-direction: column; gap: 10px; max-width: 400px; }
+.createTitle { font-size: 0.9rem; font-weight: 600; color: var(--fg); }
+.createLabel { font-size: 0.72rem; font-weight: 700; color: var(--gray); text-transform: uppercase; letter-spacing: 0.05em; }
+.createInput { height: 32px; background: var(--surface); border: 1px solid var(--border); border-radius: 7px; padding: 0 10px; font-size: 0.82rem; color: var(--fg); }
+.createError { font-size: 0.75rem; color: var(--red); background: var(--red-tint-bg); padding: 6px 10px; border-radius: 6px; }
+.createActions { display: flex; gap: 8px; margin-top: 4px; }
+.btnCancel { height: 30px; padding: 0 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; font-size: 0.78rem; cursor: pointer; color: var(--fg); }
+.btnCreate { height: 30px; padding: 0 14px; background: var(--blue); color: white; border: none; border-radius: 7px; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+.btnCreate:disabled { opacity: 0.5; cursor: default; }

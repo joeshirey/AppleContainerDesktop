@@ -1,0 +1,15 @@
+.panel { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+.header { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); display: flex; align-items: flex-start; justify-content: space-between; flex-shrink: 0; }
+.name { font-size: 0.9rem; font-weight: 600; color: var(--fg); display: flex; align-items: center; gap: 8px; }
+.defaultBadge { font-size: 0.65rem; background: var(--green-tint-bg); color: var(--green-tint-text); padding: 2px 7px; border-radius: 10px; font-weight: 600; }
+.status { font-size: 0.72rem; color: var(--gray); margin-top: 2px; }
+.actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.btnGhost { height: 28px; padding: 0 12px; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 7px; font-size: 0.72rem; cursor: pointer; }
+.btnStop { height: 28px; padding: 0 12px; background: var(--red); color: white; border: none; border-radius: 7px; font-size: 0.72rem; font-weight: 600; cursor: pointer; }
+.btnDanger { height: 28px; padding: 0 12px; background: var(--red); color: white; border: none; border-radius: 7px; font-size: 0.72rem; font-weight: 600; cursor: pointer; }
+.error { font-size: 0.78rem; color: var(--red); padding: 6px 16px; background: var(--red-tint-bg); border-bottom: 1px solid var(--red-tint-border); flex-shrink: 0; }
+.body { flex: 1; padding: 16px; overflow-y: auto; }
+.grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.card { background: var(--surface); border-radius: 10px; padding: 12px 14px; border: 1px solid var(--border); }
+.cardLabel { font-size: 0.65rem; font-weight: 700; color: var(--gray); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+.cardValue { font-size: 0.85rem; font-weight: 500; color: var(--fg); }
