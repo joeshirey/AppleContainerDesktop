@@ -30,3 +30,13 @@ export interface Machine {
 }
 
 export type NavSection = "containers" | "images" | "hub" | "machines" | "settings";
+
+export interface Settings {
+  pollInterval: number;    // milliseconds, default 5000
+  defaultLogLines: number; // default 100
+}
+
+export const DEFAULT_SETTINGS: Settings = {
+  pollInterval: 5000,
+  defaultLogLines: 100,
+};

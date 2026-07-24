@@ -1,0 +1,9 @@
+.root { padding: 32px; max-width: 520px; }
+.title { font-size: 1.1rem; font-weight: 700; color: var(--fg); margin-bottom: 24px; }
+.section { background: var(--surface); border-radius: 12px; border: 1px solid var(--border); overflow: hidden; }
+.row { display: flex; align-items: center; justify-content: space-between; padding: 14px 16px; border-bottom: 1px solid var(--border); gap: 16px; }
+.row:last-child { border-bottom: none; }
+.rowInfo { flex: 1; }
+.label { display: block; font-size: 0.85rem; font-weight: 500; color: var(--fg); margin-bottom: 2px; }
+.desc { font-size: 0.75rem; color: var(--gray); }
+.select { height: 30px; padding: 0 8px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; font-size: 0.78rem; color: var(--fg); cursor: pointer; min-width: 130px; }
