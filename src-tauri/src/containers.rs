@@ -153,3 +153,58 @@ pub fn pull_image(name: String) -> Result<(), String> {
 pub fn list_machines() -> Result<Value, String> {
     run_cmd(&["machine", "ls"]).map_err(|e| e.message)
 }
+
+#[tauri::command]
+pub fn prune_images() -> Result<(), String> {
+    run_cmd(&["image", "prune"])
+        .map(|_| ())
+        .map_err(|e| e.message)
+}
+
+#[tauri::command]
+pub fn inspect_machine(name: String) -> Result<Value, String> {
+    run_cmd(&["machine", "inspect", &name]).map_err(|e| e.message)
+}
+
+#[tauri::command]
+pub fn create_machine(
+    image: String,
+    name: Option<String>,
+    cpus: Option<u32>,
+    memory: Option<String>,
+) -> Result<(), String> {
+    let mut args = vec!["machine".to_string(), "create".to_string()];
+    if let Some(n) = name {
+        args.extend_from_slice(&["--name".to_string(), n]);
+    }
+    if let Some(c) = cpus {
+        args.extend_from_slice(&["--cpus".to_string(), c.to_string()]);
+    }
+    if let Some(m) = memory {
+        args.extend_from_slice(&["--memory".to_string(), m]);
+    }
+    args.push(image);
+    let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
+    run_cmd(&refs).map(|_| ()).map_err(|e| e.message)
+}
+
+#[tauri::command]
+pub fn stop_machine(name: String) -> Result<(), String> {
+    run_cmd(&["machine", "stop", &name])
+        .map(|_| ())
+        .map_err(|e| e.message)
+}
+
+#[tauri::command]
+pub fn delete_machine(name: String) -> Result<(), String> {
+    run_cmd(&["machine", "delete", &name])
+        .map(|_| ())
+        .map_err(|e| e.message)
+}
+
+#[tauri::command]
+pub fn set_default_machine(name: String) -> Result<(), String> {
+    run_cmd(&["machine", "set-default", &name])
+        .map(|_| ())
+        .map_err(|e| e.message)
+}
