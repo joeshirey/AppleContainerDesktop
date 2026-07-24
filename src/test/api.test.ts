@@ -31,10 +31,17 @@ describe("api", () => {
     expect(result).toEqual([]);
   });
 
-  it("listContainers returns typed containers", async () => {
-    mockInvoke.mockResolvedValue([{ id: "abc", name: "nginx", image: "nginx:latest", status: "running" }]);
+  it("listContainers normalizes nested CLI JSON into flat Container", async () => {
+    mockInvoke.mockResolvedValue([{
+      id: "nginx",
+      configuration: { image: { reference: "nginx:latest" }, creationDate: "2026-01-01T00:00:00Z", publishedPorts: [] },
+      status: { state: "running" },
+    }]);
     const result = await listContainers();
+    expect(result[0].id).toBe("nginx");
     expect(result[0].name).toBe("nginx");
+    expect(result[0].image).toBe("nginx:latest");
+    expect(result[0].status).toBe("running");
   });
 
   // startContainer

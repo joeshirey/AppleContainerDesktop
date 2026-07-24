@@ -1,7 +1,27 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { Container, ContainerStats, Image, Machine } from "./types";
 
-export const listContainers = (): Promise<Container[]> => invoke("list_containers");
+// The Apple container CLI returns deeply nested JSON. These helpers normalize
+// the raw CLI output into our flat types.
+
+function normalizeContainer(raw: any): Container {
+  const ports = (raw.configuration?.publishedPorts ?? []) as any[];
+  const portStr = ports.length
+    ? ports.map((p: any) => `${p.hostPort ?? p.containerPort}→${p.containerPort}`).join(", ")
+    : undefined;
+  return {
+    id: raw.id ?? "",
+    name: raw.id ?? "",
+    image: raw.configuration?.image?.reference ?? "",
+    status: raw.status?.state ?? "stopped",
+    created: raw.configuration?.creationDate,
+    ports: portStr,
+  };
+}
+
+export const listContainers = (): Promise<Container[]> =>
+  invoke<any[]>("list_containers").then(arr => (arr ?? []).map(normalizeContainer));
+
 export const startContainer = (id: string): Promise<void> => invoke("start_container", { id });
 export const stopContainer = (id: string): Promise<void> => invoke("stop_container", { id });
 export const removeContainer = (id: string): Promise<void> => invoke("remove_container", { id });
