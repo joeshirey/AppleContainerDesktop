@@ -16,8 +16,8 @@ const mockTags = vi.mocked(getHubTags);
 
 const SEARCH_RESPONSE = {
   results: [
-    { name: "nginx", description: "Official Nginx image", star_count: 20000, pull_count: 1200000000, is_official: true },
-    { name: "myuser/myapp", description: "A custom app", star_count: 42, pull_count: 1000, is_official: false },
+    { repo_name: "library/nginx", short_description: "Official Nginx image", star_count: 20000, pull_count: 1200000000, is_official: true },
+    { repo_name: "myuser/myapp", short_description: "A custom app", star_count: 42, pull_count: 1000, is_official: false },
   ],
 };
 

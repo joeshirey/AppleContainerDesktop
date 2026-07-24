@@ -3,7 +3,8 @@ import { pullImage, searchHub, getHubTags } from "../api";
 import styles from "./HubSearchView.module.css";
 
 interface HubResult {
-  name: string;
+  name: string;       // full repo_name e.g. "library/postgres" or "myuser/app"
+  displayName: string; // user-facing e.g. "postgres" or "myuser/app"
   description: string;
   isOfficial: boolean;
   pullCount: number;
@@ -47,14 +48,20 @@ export function HubSearchView() {
       const data = await searchHub(query.trim());
       const raw: any[] = data.results ?? [];
       const withTags = await Promise.all(
-        raw.map(async (r) => ({
-          name: r.name as string,
-          description: (r.description ?? "") as string,
-          isOfficial: !!(r.is_official),
-          pullCount: r.pull_count ?? 0,
-          starCount: r.star_count ?? 0,
-          tags: await fetchTags(r.name),
-        }))
+        raw.map(async (r) => {
+          // Docker Hub v2 search uses repo_name / short_description
+          const name: string = r.repo_name ?? r.name ?? "";
+          const displayName = name.startsWith("library/") ? name.slice("library/".length) : name;
+          return {
+            name,
+            displayName,
+            description: (r.short_description ?? r.description ?? "") as string,
+            isOfficial: !!(r.is_official),
+            pullCount: r.pull_count ?? 0,
+            starCount: r.star_count ?? 0,
+            tags: await fetchTags(name),
+          };
+        })
       );
       setResults(withTags);
     } catch (e: any) {
@@ -66,7 +73,7 @@ export function HubSearchView() {
 
   async function handlePull(result: HubResult) {
     const tag = result.tags[0] ?? "latest";
-    const image = `${result.name}:${tag}`;
+    const image = `${result.displayName}:${tag}`;
     setPulling(result.name);
     setPullError(null);
     setPullSuccess(null);
@@ -111,7 +118,7 @@ export function HubSearchView() {
             <div className={styles.cardIcon}>📦</div>
             <div className={styles.cardBody}>
               <div className={styles.cardName}>
-                {r.name}
+                {r.displayName}
                 {r.isOfficial && <span className={styles.official}>Official</span>}
               </div>
               {r.description && <div className={styles.cardDesc}>{r.description}</div>}
