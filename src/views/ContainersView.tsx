@@ -10,7 +10,8 @@ import styles from "./ContainersView.module.css";
 export function ContainersView() {
   const { settings } = useSettings();
   const { containers, error, loading, refresh } = useContainers(settings.pollInterval);
-  const [selected, setSelected] = useState<Container | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = containers.find(c => c.id === selectedId) ?? null;
   const [filter, setFilter] = useState("");
   const [showRun, setShowRun] = useState(false);
 
@@ -41,17 +42,17 @@ export function ContainersView() {
         {loading && <div className={styles.msg}>Loading...</div>}
         {running.length > 0 && <>
           <div className={styles.group}>Running · {running.length}</div>
-          {running.map(c => <Row key={c.id} c={c} selected={selected?.id === c.id} onClick={() => setSelected(c)} />)}
+          {running.map(c => <Row key={c.id} c={c} selected={selectedId === c.id} onClick={() => setSelectedId(c.id)} />)}
         </>}
         {stopped.length > 0 && <>
           <div className={styles.group}>Stopped · {stopped.length}</div>
-          {stopped.map(c => <Row key={c.id} c={c} selected={selected?.id === c.id} onClick={() => setSelected(c)} />)}
+          {stopped.map(c => <Row key={c.id} c={c} selected={selectedId === c.id} onClick={() => setSelectedId(c.id)} />)}
         </>}
         {!loading && filtered.length === 0 && <div className={styles.msg}>No containers.</div>}
       </div>
       <div className={styles.detail}>
         {selected
-          ? <ContainerDetail container={selected} onAction={refresh} onRemove={() => { setSelected(null); refresh(); }} />
+          ? <ContainerDetail container={selected} onAction={refresh} onRemove={() => { setSelectedId(null); refresh(); }} />
           : <div className={styles.emptyDetail}>Select a container</div>}
       </div>
       {showRun && (

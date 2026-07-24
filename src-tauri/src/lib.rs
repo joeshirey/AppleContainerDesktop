@@ -20,6 +20,7 @@ pub fn run() {
             run_container,
             check_system_status,
             start_system,
+            stop_system,
             list_images,
             remove_image,
             pull_image,

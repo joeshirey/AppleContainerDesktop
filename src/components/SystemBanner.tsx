@@ -1,7 +1,22 @@
 import styles from "./SystemBanner.module.css";
 
-export function SystemBanner({ running, onStart }: { running: boolean; onStart: () => void }) {
-  if (running) return null;
+export function SystemBanner({
+  running,
+  onStart,
+  onStop,
+}: {
+  running: boolean;
+  onStart: () => void;
+  onStop: () => void;
+}) {
+  if (running) {
+    return (
+      <div className={styles.bannerRunning}>
+        <span>Container system is running.</span>
+        <button className={styles.btnStop} onClick={onStop}>Stop System</button>
+      </div>
+    );
+  }
   return (
     <div className={styles.banner}>
       <span>Container system is not running.</span>

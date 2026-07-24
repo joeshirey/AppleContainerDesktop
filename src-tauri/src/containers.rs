@@ -131,6 +131,13 @@ pub fn start_system() -> Result<(), String> {
 }
 
 #[tauri::command]
+pub fn stop_system() -> Result<(), String> {
+    run_cmd(&["system", "stop"])
+        .map(|_| ())
+        .map_err(|e| e.message)
+}
+
+#[tauri::command]
 pub fn list_images() -> Result<Value, String> {
     run_cmd(&["image", "ls"]).map_err(|e| e.message)
 }

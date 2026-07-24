@@ -82,3 +82,4 @@ export const deleteMachine = (name: string): Promise<void> => invoke("delete_mac
 export const setDefaultMachine = (name: string): Promise<void> => invoke("set_default_machine", { name });
 export const checkSystemStatus = (): Promise<{ status: string }> => invoke("check_system_status");
 export const startSystem = (): Promise<void> => invoke("start_system");
+export const stopSystem = (): Promise<void> => invoke("stop_system");
