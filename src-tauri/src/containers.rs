@@ -39,6 +39,7 @@ pub fn get_logs(id: String, lines: u32) -> Result<String, String> {
 
 #[tauri::command]
 pub fn exec_in_container(id: String, command: String) -> Result<String, String> {
+    // Splits on whitespace — arguments with spaces are not supported in v1
     let parts: Vec<&str> = command.split_whitespace().collect();
     let mut args = vec!["exec", id.as_str()];
     args.extend_from_slice(&parts);
@@ -98,9 +99,11 @@ pub fn run_container(opts: Value) -> Result<(), String> {
             }
         }
     }
-    if let Some(img) = opts.get("image").and_then(|v| v.as_str()) {
-        args.push(img.to_string());
-    }
+    let img = opts
+        .get("image")
+        .and_then(|v| v.as_str())
+        .ok_or_else(|| "missing required field: image".to_string())?;
+    args.push(img.to_string());
     let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
     run_cmd(&refs).map(|_| ()).map_err(|e| e.message)
 }
