@@ -1,0 +1,30 @@
+export interface Container {
+  id: string;
+  name: string;
+  image: string;
+  status: string;
+  ports?: string;
+  created?: string;
+}
+
+export interface ContainerStats {
+  cpu_percent?: number;
+  memory_usage?: string;
+  cpus?: number;
+}
+
+export interface Image {
+  id: string;
+  repository: string;
+  tag: string;
+  size: string;
+  created: string;
+}
+
+export interface Machine {
+  name: string;
+  status: string;
+  isDefault: boolean;
+}
+
+export type NavSection = "containers" | "images" | "hub" | "machines" | "settings";
