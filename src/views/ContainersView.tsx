@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useContainers } from "../hooks/useContainers";
+import { useSettings } from "../hooks/useSettings";
 import { StatusDot } from "../components/StatusDot";
 import { ContainerDetail } from "../panels/ContainerDetail";
 import { RunModal } from "../panels/RunModal";
@@ -7,7 +8,8 @@ import type { Container } from "../types";
 import styles from "./ContainersView.module.css";
 
 export function ContainersView() {
-  const { containers, error, loading, refresh } = useContainers();
+  const { settings } = useSettings();
+  const { containers, error, loading, refresh } = useContainers(settings.pollInterval);
   const [selected, setSelected] = useState<Container | null>(null);
   const [filter, setFilter] = useState("");
   const [showRun, setShowRun] = useState(false);

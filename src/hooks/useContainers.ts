@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import type { Container } from "../types";
 import { listContainers } from "../api";
 
-export function useContainers() {
+export function useContainers(intervalMs = 5000) {
   const [containers, setContainers] = useState<Container[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -22,9 +22,9 @@ export function useContainers() {
 
   useEffect(() => {
     fetchContainers();
-    timer.current = setInterval(fetchContainers, 5000);
+    timer.current = setInterval(fetchContainers, intervalMs);
     return () => { if (timer.current) clearInterval(timer.current); };
-  }, [fetchContainers]);
+  }, [fetchContainers, intervalMs]);
 
   return { containers, error, loading, refresh: fetchContainers };
 }

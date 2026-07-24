@@ -1,11 +1,17 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { getLogs } from "../api";
+import { useSettings } from "../hooks/useSettings";
 import styles from "./LogsPanel.module.css";
 
 export function LogsPanel({ containerId }: { containerId: string }) {
+  const { settings } = useSettings();
   const [logs, setLogs] = useState("");
   const [follow, setFollow] = useState(false);
   const [lines, setLines] = useState(100);
+
+  useEffect(() => {
+    setLines(settings.defaultLogLines);
+  }, [settings.defaultLogLines]);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   const bottom = useRef<HTMLDivElement>(null);
 
