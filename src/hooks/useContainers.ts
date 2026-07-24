@@ -8,7 +8,7 @@ export function useContainers() {
   const [loading, setLoading] = useState(true);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const fetch = useCallback(async () => {
+  const fetchContainers = useCallback(async () => {
     try {
       const result = await listContainers();
       setContainers(Array.isArray(result) ? result : []);
@@ -21,10 +21,10 @@ export function useContainers() {
   }, []);
 
   useEffect(() => {
-    fetch();
-    timer.current = setInterval(fetch, 5000);
+    fetchContainers();
+    timer.current = setInterval(fetchContainers, 5000);
     return () => { if (timer.current) clearInterval(timer.current); };
-  }, [fetch]);
+  }, [fetchContainers]);
 
-  return { containers, error, loading, refresh: fetch };
+  return { containers, error, loading, refresh: fetchContainers };
 }

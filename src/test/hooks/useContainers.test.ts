@@ -30,6 +30,7 @@ describe("useContainers", () => {
     const { result } = renderHook(() => useContainers());
     await act(async () => { await vi.advanceTimersByTimeAsync(0); });
     expect(result.current.error).toBeTruthy();
+    expect(typeof result.current.error).toBe("string");
   });
 
   it("refresh() re-fetches immediately", async () => {
