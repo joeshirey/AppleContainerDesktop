@@ -49,7 +49,7 @@ export function ContainersView() {
       </div>
       <div className={styles.detail}>
         {selected
-          ? <ContainerDetail container={selected} onAction={refresh} />
+          ? <ContainerDetail container={selected} onAction={refresh} onRemove={() => { setSelected(null); refresh(); }} />
           : <div className={styles.emptyDetail}>Select a container</div>}
       </div>
       {showRun && (

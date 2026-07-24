@@ -9,7 +9,7 @@
 .rowSelected { background: var(--blue) !important; }
 .rowSelected .name, .rowSelected .meta { color: white; }
 .info { flex: 1; min-width: 0; }
-.name { font-size: 0.8rem; font-weight: 500; color: #1c1c1e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.name { font-size: 0.8rem; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .meta { font-size: 0.68rem; color: var(--gray); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .detail { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
 .emptyDetail { display: flex; align-items: center; justify-content: center; flex: 1; color: var(--gray); font-size: 0.85rem; }

@@ -6,6 +6,19 @@ pub struct CmdError {
     pub message: String,
 }
 
+/// Resolve the `container` binary path.
+/// macOS GUI apps launched from Finder/Dock only get a minimal PATH, so probe
+/// the two Homebrew locations before falling back to a plain PATH lookup.
+fn container_bin() -> std::path::PathBuf {
+    for candidate in ["/opt/homebrew/bin/container", "/usr/local/bin/container"] {
+        let p = std::path::Path::new(candidate);
+        if p.exists() {
+            return p.to_path_buf();
+        }
+    }
+    std::path::PathBuf::from("container")
+}
+
 /// Run `container <args>`, appending --format json for list commands.
 /// Returns parsed JSON on success.
 pub fn run_cmd(args: &[&str]) -> Result<Value, CmdError> {
@@ -22,7 +35,7 @@ pub fn run_cmd(args: &[&str]) -> Result<Value, CmdError> {
         full.extend_from_slice(&["--format", "json"]);
     }
 
-    let out = Command::new("container")
+    let out = Command::new(container_bin())
         .args(&full)
         .output()
         .map_err(|e| CmdError { message: format!("CLI not found: {e}") })?;

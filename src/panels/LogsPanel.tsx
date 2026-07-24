@@ -14,7 +14,13 @@ export function LogsPanel({ containerId }: { containerId: string }) {
     catch (e) { setLogs(`Error: ${e instanceof Error ? e.message : String(e)}`); }
   }, [containerId, lines]);
 
-  useEffect(() => { fetchLogs(); }, [fetchLogs]);
+  useEffect(() => {
+    let live = true;
+    getLogs(containerId, lines)
+      .then(result => { if (live) setLogs(result); })
+      .catch(e => { if (live) setLogs(`Error: ${e instanceof Error ? e.message : String(e)}`); });
+    return () => { live = false; };
+  }, [containerId, lines]);
 
   useEffect(() => {
     if (!follow) { if (timer.current) clearInterval(timer.current); return; }

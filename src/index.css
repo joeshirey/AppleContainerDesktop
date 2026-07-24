@@ -1,7 +1,7 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
-  background: #f2f2f7; color: #1c1c1e;
+  background: #f2f2f7; color: var(--fg);
   overflow: hidden; -webkit-font-smoothing: antialiased;
 }
 :root {
@@ -10,4 +10,6 @@ body {
   --green-tint-bg: #e8f5e9; --green-tint-text: #2e7d32;
   --gray-tint-bg: #f2f2f7; --gray-tint-text: #636366;
   --red-tint-bg: #fff0f0; --red-tint-border: rgba(255, 59, 48, 0.15);
+  --terminal-bg: #1c1c1e;
+  --terminal-fg: #e5e5ea;
 }

@@ -7,7 +7,7 @@ import styles from "./ContainerDetail.module.css";
 
 type Tab = "info" | "logs" | "exec" | "settings";
 
-export function ContainerDetail({ container, onAction }: { container: Container; onAction?: () => void }) {
+export function ContainerDetail({ container, onAction, onRemove }: { container: Container; onAction?: () => void; onRemove?: () => void }) {
   const [tab, setTab] = useState<Tab>("info");
   const [stats, setStats] = useState<ContainerStats | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -47,7 +47,7 @@ export function ContainerDetail({ container, onAction }: { container: Container;
           {!confirmRemove
             ? <button className={styles.btnGhost} onClick={() => setConfirmRemove(true)}>Remove</button>
             : <>
-                <button className={styles.btnRed} onClick={() => act(() => removeContainer(container.id))}>Confirm</button>
+                <button className={styles.btnRed} onClick={() => act(async () => { await removeContainer(container.id); onRemove?.(); })}>Confirm</button>
                 <button className={styles.btnGhost} onClick={() => setConfirmRemove(false)}>Cancel</button>
               </>}
         </div>

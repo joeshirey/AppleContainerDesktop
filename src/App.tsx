@@ -31,7 +31,7 @@ export default function App() {
   }, []);
 
   async function handleStart() {
-    try { await startSystem(); setSysRunning(true); } catch {}
+    try { await startSystem(); setSysRunning(true); } catch (e) { console.error('startSystem failed:', e); }
   }
 
   return (

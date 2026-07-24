@@ -1,8 +1,8 @@
 .root { display: flex; flex-direction: column; flex: 1; height: 100%; }
-.term { flex: 1; overflow-y: auto; background: #1c1c1e; border-radius: 8px; padding: 12px; margin-bottom: 10px; font-family: "SF Mono","Menlo",monospace; font-size: 0.72rem; line-height: 1.5; }
+.term { flex: 1; overflow-y: auto; background: var(--terminal-bg); border-radius: 8px; padding: 12px; margin-bottom: 10px; font-family: "SF Mono","Menlo",monospace; font-size: 0.72rem; line-height: 1.5; }
 .hint { color: var(--gray-tint-text); }
 .out, .err { white-space: pre-wrap; word-break: break-all; margin: 0 0 8px; }
-.out { color: #e5e5ea; }
+.out { color: var(--terminal-fg); }
 .err { color: var(--red); }
 .row { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
 .prompt { font-family: "SF Mono","Menlo",monospace; font-size: 0.85rem; color: var(--gray); }
