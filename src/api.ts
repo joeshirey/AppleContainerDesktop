@@ -59,6 +59,26 @@ export const listImages = (): Promise<Image[]> =>
 export const removeImage = (id: string): Promise<void> => invoke("remove_image", { id });
 export const pullImage = (name: string): Promise<void> => invoke("pull_image", { name });
 export const pruneImages = (): Promise<void> => invoke("prune_images");
-export const listMachines = (): Promise<Machine[]> => invoke("list_machines");
+function normalizeMachine(raw: any): Machine {
+  return {
+    name: raw.id ?? raw.name ?? "",
+    status: raw.status?.state ?? (typeof raw.status === "string" ? raw.status : "stopped"),
+    isDefault: raw.isDefault ?? raw.default ?? false,
+    cpus: raw.configuration?.cpus,
+    memoryMB: raw.configuration?.memoryInBytes
+      ? Math.round(raw.configuration.memoryInBytes / (1024 * 1024))
+      : undefined,
+  };
+}
+
+export const listMachines = (): Promise<Machine[]> =>
+  invoke<any[]>("list_machines").then(arr => (arr ?? []).map(normalizeMachine));
+export const inspectMachine = (name: string): Promise<Record<string, unknown>> =>
+  invoke("inspect_machine", { name });
+export const createMachine = (opts: { image: string; name?: string; cpus?: number; memory?: string }): Promise<void> =>
+  invoke("create_machine", { image: opts.image, name: opts.name, cpus: opts.cpus, memory: opts.memory });
+export const stopMachine = (name: string): Promise<void> => invoke("stop_machine", { name });
+export const deleteMachine = (name: string): Promise<void> => invoke("delete_machine", { name });
+export const setDefaultMachine = (name: string): Promise<void> => invoke("set_default_machine", { name });
 export const checkSystemStatus = (): Promise<{ status: string }> => invoke("check_system_status");
 export const startSystem = (): Promise<void> => invoke("start_system");

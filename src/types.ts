@@ -25,6 +25,8 @@ export interface Machine {
   name: string;
   status: string;
   isDefault: boolean;
+  cpus?: number;
+  memoryMB?: number;
 }
 
 export type NavSection = "containers" | "images" | "hub" | "machines" | "settings";

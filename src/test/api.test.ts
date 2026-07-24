@@ -17,6 +17,11 @@ import {
   listMachines,
   checkSystemStatus,
   startSystem,
+  inspectMachine,
+  createMachine,
+  stopMachine,
+  deleteMachine,
+  setDefaultMachine,
 } from "../api";
 
 const mockInvoke = vi.mocked(invoke);
@@ -167,5 +172,56 @@ describe("api", () => {
     mockInvoke.mockResolvedValue(undefined);
     await startSystem();
     expect(mockInvoke).toHaveBeenCalledWith("start_system");
+  });
+
+  // inspectMachine
+  it("inspectMachine calls invoke with inspect_machine and name", async () => {
+    mockInvoke.mockResolvedValue({});
+    await inspectMachine("my-machine");
+    expect(mockInvoke).toHaveBeenCalledWith("inspect_machine", { name: "my-machine" });
+  });
+
+  // createMachine
+  it("createMachine calls invoke with create_machine and opts", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+    await createMachine({ image: "alpine:3.22", name: "test" });
+    expect(mockInvoke).toHaveBeenCalledWith("create_machine", { image: "alpine:3.22", name: "test", cpus: undefined, memory: undefined });
+  });
+
+  // stopMachine
+  it("stopMachine calls invoke with stop_machine and name", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+    await stopMachine("my-machine");
+    expect(mockInvoke).toHaveBeenCalledWith("stop_machine", { name: "my-machine" });
+  });
+
+  // deleteMachine
+  it("deleteMachine calls invoke with delete_machine and name", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+    await deleteMachine("my-machine");
+    expect(mockInvoke).toHaveBeenCalledWith("delete_machine", { name: "my-machine" });
+  });
+
+  // setDefaultMachine
+  it("setDefaultMachine calls invoke with set_default_machine and name", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+    await setDefaultMachine("my-machine");
+    expect(mockInvoke).toHaveBeenCalledWith("set_default_machine", { name: "my-machine" });
+  });
+
+  // listMachines normalization
+  it("listMachines normalizes nested CLI JSON into flat Machine", async () => {
+    mockInvoke.mockResolvedValue([{
+      id: "my-machine",
+      configuration: { cpus: 4, memoryInBytes: 4294967296 },
+      status: { state: "running" },
+      isDefault: true,
+    }]);
+    const result = await listMachines();
+    expect(result[0].name).toBe("my-machine");
+    expect(result[0].status).toBe("running");
+    expect(result[0].isDefault).toBe(true);
+    expect(result[0].cpus).toBe(4);
+    expect(result[0].memoryMB).toBe(4096);
   });
 });
