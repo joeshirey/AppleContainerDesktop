@@ -19,6 +19,27 @@ function normalizeContainer(raw: any): Container {
   };
 }
 
+function formatSize(bytes: number): string {
+  if (bytes === 0) return "—";
+  if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(0)} MB`;
+  if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} KB`;
+  return `${bytes} B`;
+}
+
+function normalizeImage(raw: any): Image {
+  const fullName: string = raw.configuration?.name ?? "";
+  const lastColon = fullName.lastIndexOf(":");
+  const repository = lastColon > 0 ? fullName.slice(0, lastColon) : fullName;
+  const tag = lastColon > 0 ? fullName.slice(lastColon + 1) : "latest";
+  return {
+    id: raw.id ?? "",
+    repository,
+    tag,
+    size: formatSize(raw.configuration?.descriptor?.size ?? 0),
+    created: raw.configuration?.creationDate ?? "",
+  };
+}
+
 export const listContainers = (): Promise<Container[]> =>
   invoke<any[]>("list_containers").then(arr => (arr ?? []).map(normalizeContainer));
 
@@ -33,9 +54,11 @@ export const runContainer = (opts: {
   image: string; name?: string; ports?: string[]; env?: string[];
   cpus?: number; memory?: string; detach: boolean;
 }): Promise<void> => invoke("run_container", { opts });
-export const listImages = (): Promise<Image[]> => invoke("list_images");
+export const listImages = (): Promise<Image[]> =>
+  invoke<any[]>("list_images").then(arr => (arr ?? []).map(normalizeImage));
 export const removeImage = (id: string): Promise<void> => invoke("remove_image", { id });
 export const pullImage = (name: string): Promise<void> => invoke("pull_image", { name });
+export const pruneImages = (): Promise<void> => invoke("prune_images");
 export const listMachines = (): Promise<Machine[]> => invoke("list_machines");
 export const checkSystemStatus = (): Promise<{ status: string }> => invoke("check_system_status");
 export const startSystem = (): Promise<void> => invoke("start_system");

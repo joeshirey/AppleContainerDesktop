@@ -13,6 +13,7 @@ import {
   listImages,
   removeImage,
   pullImage,
+  pruneImages,
   listMachines,
   checkSystemStatus,
   startSystem,
@@ -106,6 +107,29 @@ describe("api", () => {
     const result = await listImages();
     expect(mockInvoke).toHaveBeenCalledWith("list_images");
     expect(result).toEqual([]);
+  });
+
+  it("listImages normalizes nested CLI JSON into flat Image", async () => {
+    mockInvoke.mockResolvedValue([{
+      id: "sha256:35b8ff",
+      configuration: {
+        name: "docker.io/library/debian:latest",
+        creationDate: "2026-04-21T00:00:00Z",
+        descriptor: { size: 8933 }
+      }
+    }]);
+    const result = await listImages();
+    expect(result[0].id).toBe("sha256:35b8ff");
+    expect(result[0].repository).toBe("docker.io/library/debian");
+    expect(result[0].tag).toBe("latest");
+    expect(result[0].size).toBe("9 KB");
+  });
+
+  // pruneImages
+  it("pruneImages calls invoke with prune_images", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+    await pruneImages();
+    expect(mockInvoke).toHaveBeenCalledWith("prune_images");
   });
 
   // removeImage

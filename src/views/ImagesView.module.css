@@ -1,0 +1,19 @@
+.root { display: flex; flex-direction: column; height: 100%; overflow: hidden; background: var(--bg); }
+.toolbar { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; background: var(--surface); flex-shrink: 0; }
+.title { font-size: 0.9rem; font-weight: 600; color: var(--fg); flex: 1; }
+.search { height: 28px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 0 10px; font-size: 0.78rem; color: var(--fg); width: 200px; }
+.btnGhost { height: 28px; padding: 0 12px; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 7px; font-size: 0.72rem; font-weight: 500; cursor: pointer; }
+.btnDanger { height: 28px; padding: 0 12px; background: var(--red); color: white; border: none; border-radius: 7px; font-size: 0.72rem; font-weight: 600; cursor: pointer; }
+.error { font-size: 0.78rem; color: var(--red); padding: 8px 16px; background: var(--red-tint-bg); border-bottom: 1px solid var(--red-tint-border); flex-shrink: 0; }
+.tableWrap { flex: 1; overflow-y: auto; }
+.tableHeader { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 180px; padding: 8px 16px; background: var(--bg); border-bottom: 1px solid var(--border); position: sticky; top: 0; }
+.tableHeader span { font-size: 0.65rem; font-weight: 700; color: var(--gray); text-transform: uppercase; letter-spacing: 0.05em; }
+.row { display: grid; grid-template-columns: 2fr 1fr 1fr 1fr 180px; padding: 10px 16px; border-bottom: 1px solid var(--border); align-items: center; background: var(--surface); }
+.row:hover { background: var(--bg); }
+.name { font-size: 0.82rem; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mono { font-size: 0.75rem; color: var(--gray); font-family: 'SF Mono', monospace; }
+.meta { font-size: 0.78rem; color: var(--fg); }
+.actions { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.actBtn { padding: 3px 8px; border-radius: 5px; font-size: 0.68rem; font-weight: 500; border: 1px solid var(--border); background: var(--bg); color: var(--fg); cursor: pointer; }
+.actBtnDanger { padding: 3px 8px; border-radius: 5px; font-size: 0.68rem; font-weight: 500; border: 1px solid var(--red-tint-border); background: var(--red-tint-bg); color: var(--red); cursor: pointer; }
+.msg { padding: 32px; text-align: center; color: var(--gray); font-size: 0.85rem; }
