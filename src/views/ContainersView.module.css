@@ -1,5 +1,5 @@
 .root { display: flex; flex: 1; height: 100%; overflow: hidden; }
-.list { width: 260px; background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
+.list { width: 260px; background: var(--surface); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
 .toolbar { display: flex; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .search { flex: 1; height: 26px; background: var(--bg); border: none; border-radius: 6px; padding: 0 8px; font-size: 0.75rem; outline: none; }
 .btnPrimary { height: 26px; padding: 0 10px; background: var(--blue); color: white; border: none; border-radius: 6px; font-size: 0.72rem; font-weight: 600; cursor: pointer; }

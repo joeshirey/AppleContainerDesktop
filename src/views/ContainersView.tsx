@@ -16,8 +16,8 @@ export function ContainersView() {
     return containers.filter(c => c.name.toLowerCase().includes(q) || c.image.toLowerCase().includes(q));
   }, [containers, filter]);
 
-  const running = filtered.filter(c => c.status.toLowerCase() === "running");
-  const stopped = filtered.filter(c => c.status.toLowerCase() !== "running");
+  const running = useMemo(() => filtered.filter(c => c.status.toLowerCase() === "running"), [filtered]);
+  const stopped = useMemo(() => filtered.filter(c => c.status.toLowerCase() !== "running"), [filtered]);
 
   if (error && (error.includes("not found") || error.includes("CLI"))) {
     return (
