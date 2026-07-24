@@ -213,7 +213,7 @@ pub fn remove_image(id: String) -> Result<(), String> {
 
 #[tauri::command]
 pub fn pull_image(name: String) -> Result<(), String> {
-    run_cmd(&["pull", &name])
+    run_cmd(&["image", "pull", &name])
         .map(|_| ())
         .map_err(|e| e.message)
 }
