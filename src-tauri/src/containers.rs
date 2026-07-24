@@ -1,9 +1,36 @@
 use crate::cli::run_cmd;
 use serde_json::Value;
 
+fn bind_mounts_exist(container: &Value) -> bool {
+    let mounts = container
+        .get("configuration")
+        .and_then(|c| c.get("mounts").or_else(|| c.get("bindMounts")))
+        .and_then(|m| m.as_array());
+
+    let Some(mounts) = mounts else { return true };
+
+    mounts.iter().all(|m| {
+        let source = m
+            .get("source")
+            .or_else(|| m.get("hostPath"))
+            .or_else(|| m.get("src"))
+            .and_then(|s| s.as_str());
+        source.map_or(true, |p| std::path::Path::new(p).exists())
+    })
+}
+
 #[tauri::command]
 pub fn list_containers() -> Result<Value, String> {
-    run_cmd(&["ls", "-a"]).map_err(|e| e.message)
+    let raw = run_cmd(&["ls", "-a"]).map_err(|e| e.message)?;
+    if let Some(arr) = raw.as_array() {
+        let filtered: Vec<Value> = arr
+            .iter()
+            .filter(|c| bind_mounts_exist(c))
+            .cloned()
+            .collect();
+        return Ok(Value::Array(filtered));
+    }
+    Ok(raw)
 }
 
 #[tauri::command]
