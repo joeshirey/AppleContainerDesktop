@@ -1,0 +1,19 @@
+.root { display: flex; flex: 1; height: 100%; overflow: hidden; }
+.list { width: 260px; background: #fff; border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow-y: auto; flex-shrink: 0; }
+.toolbar { display: flex; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.search { flex: 1; height: 26px; background: var(--bg); border: none; border-radius: 6px; padding: 0 8px; font-size: 0.75rem; outline: none; }
+.btnPrimary { height: 26px; padding: 0 10px; background: var(--blue); color: white; border: none; border-radius: 6px; font-size: 0.72rem; font-weight: 600; cursor: pointer; }
+.group { padding: 6px 12px 4px; font-size: 0.65rem; font-weight: 700; color: var(--gray); text-transform: uppercase; letter-spacing: 0.06em; }
+.row { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border: none; background: none; border-bottom: 1px solid rgba(0,0,0,0.04); cursor: pointer; text-align: left; width: 100%; }
+.row:hover { background: var(--bg); }
+.rowSelected { background: var(--blue) !important; }
+.rowSelected .name, .rowSelected .meta { color: white; }
+.info { flex: 1; min-width: 0; }
+.name { font-size: 0.8rem; font-weight: 500; color: #1c1c1e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.meta { font-size: 0.68rem; color: var(--gray); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.detail { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+.emptyDetail { display: flex; align-items: center; justify-content: center; flex: 1; color: var(--gray); font-size: 0.85rem; }
+.empty { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 8px; padding: 32px; text-align: center; }
+.empty h2 { font-size: 1rem; } .empty p { font-size: 0.85rem; color: var(--gray); }
+.empty code { font-family: monospace; background: var(--bg); padding: 2px 6px; border-radius: 4px; }
+.msg { padding: 12px; font-size: 0.8rem; color: var(--gray); text-align: center; }
