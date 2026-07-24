@@ -63,6 +63,11 @@ export function HubSearchView() {
           };
         })
       );
+      withTags.sort((a, b) => {
+        if (a.isOfficial !== b.isOfficial) return a.isOfficial ? -1 : 1;
+        if (b.pullCount !== a.pullCount) return b.pullCount - a.pullCount;
+        return b.starCount - a.starCount;
+      });
       setResults(withTags);
     } catch (e: any) {
       setSearchError(String(e?.message ?? e));
