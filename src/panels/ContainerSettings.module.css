@@ -26,3 +26,4 @@
 .confirmTitle { font-size: 0.82rem; font-weight: 600; color: var(--fg); }
 .diffList { margin: 0; padding-left: 16px; font-size: 0.78rem; color: var(--fg); display: flex; flex-direction: column; gap: 3px; }
 .confirmActions { display: flex; gap: 8px; justify-content: flex-end; }
+.command { margin: 0; padding: 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; font-family: "SF Mono", "Menlo", monospace; font-size: 0.72rem; color: var(--fg); white-space: pre-wrap; word-break: break-all; }

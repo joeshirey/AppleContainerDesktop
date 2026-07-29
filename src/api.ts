@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Container, ContainerStats, Image, Machine } from "./types";
+import type { Container, ContainerEdits, ContainerStats, Image, Machine, RecreatePlan } from "./types";
 
 // The Apple container CLI returns deeply nested JSON. These helpers normalize
 // the raw CLI output into our flat types.
@@ -52,8 +52,16 @@ export const getStats = (id: string): Promise<ContainerStats> => invoke("get_sta
 export const inspectContainer = (id: string): Promise<Record<string, unknown>> => invoke("inspect_container", { id });
 export const runContainer = (opts: {
   image: string; name?: string; ports?: string[]; env?: string[];
-  cpus?: number; memory?: string; hostname?: string; detach: boolean;
+  cpus?: number; memory?: string; detach: boolean;
 }): Promise<void> => invoke("run_container", { opts });
+
+/// Preview the recreate of a container without changing anything.
+export const planRecreate = (id: string, edits: ContainerEdits): Promise<RecreatePlan> =>
+  invoke("plan_recreate", { id, edits });
+
+/// Replace a container, applying `edits` and carrying over every other setting.
+export const recreateContainer = (id: string, edits: ContainerEdits): Promise<void> =>
+  invoke("recreate_container", { id, edits });
 export const listImages = (): Promise<Image[]> =>
   invoke<any[]>("list_images").then(arr => (arr ?? []).map(normalizeImage));
 export const removeImage = (id: string): Promise<void> => invoke("remove_image", { id });

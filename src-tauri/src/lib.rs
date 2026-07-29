@@ -1,5 +1,6 @@
 pub mod cli;
 pub mod containers;
+pub mod recreate;
 
 use containers::*;
 
@@ -18,6 +19,8 @@ pub fn run() {
             get_stats,
             inspect_container,
             run_container,
+            plan_recreate,
+            recreate_container,
             check_system_status,
             start_system,
             stop_system,

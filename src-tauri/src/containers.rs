@@ -1,4 +1,5 @@
 use crate::cli::run_cmd;
+use crate::recreate::{build_run_args, config_of, RecreatePlan};
 use serde_json::Value;
 
 #[tauri::command]
@@ -148,9 +149,6 @@ pub fn run_container(opts: Value) -> Result<(), String> {
     if let Some(n) = opts.get("name").and_then(|v| v.as_str()) {
         args.extend_from_slice(&["--name".to_string(), n.to_string()]);
     }
-    if let Some(h) = opts.get("hostname").and_then(|v| v.as_str()) {
-        args.extend_from_slice(&["--hostname".to_string(), h.to_string()]);
-    }
     if let Some(c) = opts.get("cpus").and_then(|v| v.as_u64()) {
         args.extend_from_slice(&["--cpus".to_string(), c.to_string()]);
     }
@@ -178,6 +176,37 @@ pub fn run_container(opts: Value) -> Result<(), String> {
     args.push(img.to_string());
     let refs: Vec<&str> = args.iter().map(|s| s.as_str()).collect();
     run_cmd(&refs).map(|_| ()).map_err(|e| e.message)
+}
+
+/// Work out how `id` would be recreated with `edits` applied, without changing
+/// anything. Lets the UI show the exact command and what it cannot carry over.
+#[tauri::command]
+pub fn plan_recreate(id: String, edits: Value) -> Result<RecreatePlan, String> {
+    let inspect = run_cmd(&["inspect", &id]).map_err(|e| e.message)?;
+    let config = config_of(&inspect)
+        .ok_or_else(|| format!("could not read the configuration of container {id}"))?;
+    Ok(build_run_args(config, &edits))
+}
+
+/// Delete `id` and run it again with `edits` applied and every other setting
+/// carried over from its current configuration.
+///
+/// The container has to be removed before the replacement can claim its name,
+/// so a failure after that point is reported with the full command line to let
+/// the user recover by hand.
+#[tauri::command]
+pub fn recreate_container(id: String, edits: Value) -> Result<(), String> {
+    let plan = plan_recreate(id.clone(), edits)?;
+    let args: Vec<&str> = plan.args.iter().map(String::as_str).collect();
+
+    run_cmd(&["rm", &id]).map_err(|e| e.message)?;
+    run_cmd(&args).map(|_| ()).map_err(|e| {
+        format!(
+            "{}\n\nThe old container was already removed. Recreate it with:\ncontainer {}",
+            e.message,
+            plan.args.join(" ")
+        )
+    })
 }
 
 #[tauri::command]

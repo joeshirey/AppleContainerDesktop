@@ -1,12 +1,11 @@
 import { useState, useEffect } from "react";
-import { inspectContainer, removeContainer, runContainer } from "../api";
-import type { Container } from "../types";
+import { inspectContainer, planRecreate, recreateContainer } from "../api";
+import type { Container, ContainerEdits, RecreatePlan } from "../types";
 import styles from "./ContainerSettings.module.css";
 
 interface ParsedConfig {
   cpus: string;
   memory: string;
-  hostname: string;
   ports: string[];
   env: string[];
 }
@@ -21,28 +20,48 @@ function bytesToMemStr(bytes: number): string {
   return `${bytes}`;
 }
 
+/// Render one `publishedPorts` entry the way `container run -p` expects it.
+function portSpec(p: any): string {
+  const addr = p.hostAddress && p.hostAddress !== "0.0.0.0" ? `${p.hostAddress}:` : "";
+  const proto = p.proto && p.proto.toLowerCase() !== "tcp" ? `/${p.proto}` : "";
+  return `${addr}${p.hostPort ?? p.containerPort}:${p.containerPort}${proto}`;
+}
+
+/// Read the editable subset of `container inspect` output, which is an array of
+/// containers. Only these four settings are editable here; everything else is
+/// rebuilt by the backend from the container's own configuration.
 function parseInspect(raw: any): ParsedConfig {
-  const cfg = raw?.configuration ?? raw;
-  const memBytes = cfg?.memoryInBytes ?? cfg?.resourceLimits?.memoryInBytes ?? 0;
-  const rawPorts = cfg?.publishedPorts ?? [];
-  const ports = rawPorts.map((p: any) => {
-    const proto = p.protocol && p.protocol !== "tcp" ? `/${p.protocol}` : "";
-    return `${p.hostPort ?? p.containerPort}:${p.containerPort}${proto}`;
-  });
+  const entry = Array.isArray(raw) ? raw[0] : raw;
+  const cfg = entry?.configuration ?? entry ?? {};
   return {
-    cpus: String(cfg?.cpus ?? cfg?.resourceLimits?.cpus ?? ""),
-    memory: bytesToMemStr(memBytes),
-    hostname: cfg?.hostname ?? "",
-    ports,
-    env: cfg?.environment ?? cfg?.environmentVariables ?? [],
+    cpus: cfg.resources?.cpus != null ? String(cfg.resources.cpus) : "",
+    memory: bytesToMemStr(cfg.resources?.memoryInBytes ?? 0),
+    ports: (cfg.publishedPorts ?? []).map(portSpec),
+    env: cfg.initProcess?.environment ?? [],
   };
+}
+
+function sameList(a: string[], b: string[]): boolean {
+  return a.length === b.length && a.every((v, i) => v === b[i]);
+}
+
+/// Collect only what the user actually changed. Sending an untouched field
+/// would round-trip it through its display format and could lose precision.
+function collectEdits(a: ParsedConfig, b: ParsedConfig): ContainerEdits {
+  const edits: ContainerEdits = {};
+  if (b.cpus !== a.cpus) edits.cpus = b.cpus;
+  if (b.memory !== a.memory) edits.memory = b.memory;
+  const ports = b.ports.filter(Boolean);
+  if (!sameList(ports, a.ports)) edits.ports = ports;
+  const env = b.env.filter(Boolean);
+  if (!sameList(env, a.env)) edits.env = env;
+  return edits;
 }
 
 function diffConfigs(a: ParsedConfig, b: ParsedConfig): string[] {
   const changes: string[] = [];
   if (b.cpus !== a.cpus) changes.push(`CPUs: ${a.cpus || "default"} → ${b.cpus || "default"}`);
   if (b.memory !== a.memory) changes.push(`Memory: ${a.memory || "default"} → ${b.memory || "default"}`);
-  if (b.hostname !== a.hostname) changes.push(`Hostname: "${a.hostname || "—"}" → "${b.hostname || "—"}"`);
   b.ports.filter(p => p && !a.ports.includes(p)).forEach(p => changes.push(`+ Port ${p}`));
   a.ports.filter(p => p && !b.ports.includes(p)).forEach(p => changes.push(`- Port ${p}`));
   b.env.filter(e => e && !a.env.includes(e)).forEach(e => changes.push(`+ Env ${e}`));
@@ -54,7 +73,7 @@ export function ContainerSettings({ container }: { container: Container }) {
   const [original, setOriginal] = useState<ParsedConfig | null>(null);
   const [draft, setDraft] = useState<ParsedConfig | null>(null);
   const [loading, setLoading] = useState(true);
-  const [showConfirm, setShowConfirm] = useState(false);
+  const [plan, setPlan] = useState<RecreatePlan | null>(null);
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -65,7 +84,7 @@ export function ContainerSettings({ container }: { container: Container }) {
   useEffect(() => {
     let live = true;
     setLoading(true);
-    setShowConfirm(false);
+    setPlan(null);
     setError(null);
     setSuccess(false);
     inspectContainer(container.id)
@@ -80,24 +99,26 @@ export function ContainerSettings({ container }: { container: Container }) {
     return () => { live = false; };
   }, [container.id]);
 
+  /// Ask the backend what the recreate would run, so the user sees the exact
+  /// command and any settings it cannot carry over before committing.
+  async function handlePreview() {
+    if (!original || !draft) return;
+    setError(null);
+    try {
+      setPlan(await planRecreate(container.id, collectEdits(original, draft)));
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    }
+  }
+
   async function handleApply() {
-    if (!draft) return;
+    if (!original || !draft) return;
     setApplying(true);
     setError(null);
     try {
-      await removeContainer(container.id);
-      await runContainer({
-        image: container.image,
-        name: container.id,
-        ports: draft.ports.filter(Boolean),
-        env: draft.env.filter(Boolean),
-        cpus: draft.cpus ? Number(draft.cpus) : undefined,
-        memory: draft.memory || undefined,
-        hostname: draft.hostname || undefined,
-        detach: true,
-      });
+      await recreateContainer(container.id, collectEdits(original, draft));
       setOriginal(draft);
-      setShowConfirm(false);
+      setPlan(null);
       setSuccess(true);
       setTimeout(() => setSuccess(false), 3000);
     } catch (e: any) {
@@ -138,7 +159,7 @@ export function ContainerSettings({ container }: { container: Container }) {
       {error && <div className={styles.error}>{error}</div>}
       {success && <div className={styles.success}>Container recreated successfully.</div>}
 
-      {!showConfirm && <div className={`${styles.form} ${disabled ? styles.formDisabled : ""}`}>
+      {!plan && <div className={`${styles.form} ${disabled ? styles.formDisabled : ""}`}>
         <div className={styles.row}>
           <label className={styles.label}>CPUs</label>
           <input
@@ -162,17 +183,6 @@ export function ContainerSettings({ container }: { container: Container }) {
             disabled={disabled}
           />
         </div>
-        <div className={styles.row}>
-          <label className={styles.label}>Hostname</label>
-          <input
-            className={styles.input}
-            placeholder="Default"
-            value={draft.hostname}
-            onChange={e => setDraft({ ...draft, hostname: e.target.value })}
-            disabled={disabled}
-          />
-        </div>
-
         <div className={styles.section}>
           <div className={styles.sectionHead}>
             <span className={styles.sectionLabel}>Ports</span>
@@ -224,16 +234,28 @@ export function ContainerSettings({ container }: { container: Container }) {
 
       {!isRunning && (
         <div className={styles.footer}>
-          {showConfirm ? (
+          {plan ? (
             <div className={styles.confirm}>
               <div className={styles.confirmTitle}>Recreate container with these changes?</div>
               <ul className={styles.diffList}>
                 {changes.map((c, i) => <li key={i}>{c}</li>)}
               </ul>
+              {plan.unsupported.length > 0 && (
+                <div className={styles.notice}>
+                  <div>
+                    The container CLI has no way to set the following, so recreating drops it:
+                  </div>
+                  <ul className={styles.diffList}>
+                    {plan.unsupported.map((u, i) => <li key={i}>{u}</li>)}
+                  </ul>
+                </div>
+              )}
+              <div className={styles.confirmTitle}>This will delete and re-run the container:</div>
+              <pre className={styles.command}>{`container ${plan.args.join(" ")}`}</pre>
               <div className={styles.confirmActions}>
                 <button
                   className={styles.btnGhost}
-                  onClick={() => setShowConfirm(false)}
+                  onClick={() => setPlan(null)}
                   disabled={applying}
                 >
                   Cancel
@@ -251,7 +273,7 @@ export function ContainerSettings({ container }: { container: Container }) {
             <button
               className={styles.btnPrimary}
               disabled={changes.length === 0 || applying}
-              onClick={() => setShowConfirm(true)}
+              onClick={handlePreview}
             >
               Apply Changes
             </button>
