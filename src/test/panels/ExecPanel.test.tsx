@@ -10,22 +10,22 @@ describe("ExecPanel", () => {
 
   it("renders a command input", () => {
     render(<ExecPanel containerId="abc" />);
-    expect(screen.getByPlaceholderText(/command/i)).toBeInTheDocument();
+    expect(screen.getByRole("textbox", { name: /command/i })).toBeInTheDocument();
   });
 
   it("calls exec_in_container on submit", async () => {
     mock.mockResolvedValue("hello\n");
     render(<ExecPanel containerId="abc" />);
-    fireEvent.change(screen.getByPlaceholderText(/command/i), { target: { value: "echo hello" } });
-    fireEvent.submit(screen.getByPlaceholderText(/command/i).closest("form")!);
+    fireEvent.change(screen.getByRole("textbox", { name: /command/i }), { target: { value: "echo hello" } });
+    fireEvent.submit(screen.getByRole("textbox", { name: /command/i }).closest("form")!);
     await waitFor(() => expect(mock).toHaveBeenCalledWith("exec_in_container", { id: "abc", command: "echo hello" }));
   });
 
   it("shows command output", async () => {
     mock.mockResolvedValue("hello\n");
     render(<ExecPanel containerId="abc" />);
-    fireEvent.change(screen.getByPlaceholderText(/command/i), { target: { value: "echo hello" } });
-    fireEvent.submit(screen.getByPlaceholderText(/command/i).closest("form")!);
+    fireEvent.change(screen.getByRole("textbox", { name: /command/i }), { target: { value: "echo hello" } });
+    fireEvent.submit(screen.getByRole("textbox", { name: /command/i }).closest("form")!);
     await waitFor(() => expect(screen.getByText(/hello/)).toBeInTheDocument());
   });
 
@@ -34,7 +34,7 @@ describe("ExecPanel", () => {
     let resolve: () => void;
     mock.mockReturnValue(new Promise<string>(r => { resolve = () => r("done"); }));
     render(<ExecPanel containerId="abc" />);
-    const input = screen.getByPlaceholderText(/command/i);
+    const input = screen.getByRole("textbox", { name: /command/i });
     fireEvent.change(input, { target: { value: "sleep 1" } });
     fireEvent.submit(input.closest("form")!);
     expect(input).toBeDisabled();
@@ -54,7 +54,7 @@ describe("ExecPanel", () => {
   it("shows error in terminal on exec failure", async () => {
     mock.mockRejectedValue(new Error("permission denied"));
     render(<ExecPanel containerId="abc" />);
-    const input = screen.getByPlaceholderText(/command/i);
+    const input = screen.getByRole("textbox", { name: /command/i });
     fireEvent.change(input, { target: { value: "cat /root/secret" } });
     fireEvent.submit(input.closest("form")!);
     await waitFor(() => expect(screen.getByText(/permission denied/i)).toBeInTheDocument());
@@ -63,7 +63,7 @@ describe("ExecPanel", () => {
   it("clears input after submit", async () => {
     mock.mockResolvedValue("ok");
     render(<ExecPanel containerId="abc" />);
-    const input = screen.getByPlaceholderText(/command/i);
+    const input = screen.getByRole("textbox", { name: /command/i });
     fireEvent.change(input, { target: { value: "echo hi" } });
     fireEvent.submit(input.closest("form")!);
     await waitFor(() => expect(input).toHaveValue(""));

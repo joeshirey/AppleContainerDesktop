@@ -34,6 +34,7 @@ export function ExecPanel({ containerId }: { containerId: string }) {
         <span className={styles.prompt}>$</span>
         <input
           className={styles.input}
+          aria-label="Command"
           value={cmd}
           onChange={e => setCmd(e.target.value)}
           placeholder="e.g. ls /app or cd /tmp && cat file.txt"
