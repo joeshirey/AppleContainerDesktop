@@ -1,5 +1,7 @@
 # Apple Containers Desktop
 
+[![CI](https://github.com/joeshirey/AppleContainerDesktop/actions/workflows/ci.yml/badge.svg)](https://github.com/joeshirey/AppleContainerDesktop/actions/workflows/ci.yml)
+
 A native macOS desktop GUI for [Apple's `container`](https://github.com/apple/container) CLI.
 
 `container` is a good tool with no graphical front end. This puts one on top of it: a
@@ -26,7 +28,7 @@ Anything you do here you could have done at the prompt.
 | **Mac** | Apple silicon. Required — `container` does not run on Intel. |
 | **macOS** | 26 or later. Apple does not support `container` on older versions. |
 | **`container` CLI** | Installed and on disk. Developed against 1.2.0. |
-| **To build** | Node.js 18+, and a Rust toolchain via [rustup](https://rustup.rs). |
+| **To build** | Node.js 20+, and a Rust toolchain via [rustup](https://rustup.rs). |
 
 Install the CLI from [apple/container releases](https://github.com/apple/container/releases),
 then start the service once:
@@ -44,7 +46,7 @@ Homebrew.
 
 This is the intended way to use the app.
 
-**One-time setup.** Install [Node.js](https://nodejs.org) 18 or newer and a Rust toolchain:
+**One-time setup.** Install [Node.js](https://nodejs.org) 20 or newer and a Rust toolchain:
 
 ```sh
 curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
@@ -225,11 +227,23 @@ or stop it.
 ```sh
 npm test                    # 159 frontend tests (Vitest + Testing Library)
 npm run test:watch
-cd src-tauri && cargo test  # 63 Rust tests
 npm run build               # tsc + vite, the typecheck gate
+cd src-tauri
+cargo fmt --check
+cargo clippy --all-targets --locked -- -D warnings
+cargo test --locked         # 63 Rust tests
+cargo build --locked
 ```
 
-All four are expected to pass before a commit.
+All of these run in CI on every push and pull request — see
+[.github/workflows/ci.yml](.github/workflows/ci.yml). The job uses `macos-26`, the same
+platform the app requires, and does *not* install the `container` CLI: no test needs it,
+because the one test that shells out asserts on the error path.
+
+The ordering matters if you run them by hand. `npm run build` has to come before any
+`cargo` command, because `tauri-codegen` embeds `frontendDist` at compile time and `dist/`
+is not checked in — without it the Rust build fails with *"the `frontendDist` configuration
+is set to `../dist` but this path doesn't exist"*.
 
 ### Layout
 
@@ -272,8 +286,6 @@ Being honest about what isn't done:
 - **No registry logins.** `container registry login` is not wired up, so private
   registries only work if you have already authenticated at the prompt.
 - **No file copy in or out.** `container cp` and `container export` are missing.
-- **No CI.** There is no workflow in `.github/`, so the four gates below are only ever
-  run by whoever is committing. They are expected to pass, but nothing enforces it.
 - **Volume and network creation is deliberately partial.** Labels, driver options, the
   network plugin, and IPv6 prefixes are all left at the CLI's defaults; the panels
   expose size, subnet, and host-only because those are the ones that change behaviour
