@@ -223,7 +223,7 @@ or stop it.
 ## Development
 
 ```sh
-npm test                    # 159 frontend tests (Vitest + Testing Library)
+npm test                    # 182 frontend tests (Vitest + Testing Library)
 npm run test:watch
 npm run build               # tsc + vite, the typecheck gate
 cd src-tauri
