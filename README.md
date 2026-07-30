@@ -214,6 +214,19 @@ The split worth knowing: `cli.rs` is the only place that spawns a process, and `
 is pure — it takes inspect JSON plus edits, returns an argv, and touches nothing. That is
 why it carries most of the Rust test suite.
 
+### The icon
+
+`app-icon.png` in the repo root is the master: 1024×1024 with real transparency, the tile
+sized to 824×824 on Apple's macOS icon grid. Everything in `src-tauri/icons/` is generated
+from it — replace the master and re-run:
+
+```sh
+npm run tauri icon app-icon.png
+```
+
+That also emits `ios/` and `android/` directories, which this project does not use; delete
+them. The original generated artwork is kept at [docs/app-icon-source.jpg](docs/app-icon-source.jpg).
+
 ## Known gaps
 
 Being honest about what isn't done:
@@ -224,7 +237,6 @@ Being honest about what isn't done:
 - **No shell into a container machine.** `container machine run` is the main thing you'd
   want a machine for, and the Machines tab can't do it. `machine set` and `machine logs`
   are missing too.
-- **The app icon is still the Tauri logo**, inherited from the project scaffold.
 - **Image names show the full registry path**, so a Docker Hub image reads as
   `docker.io/library/debian` rather than `debian`.
 - **Containers whose bind-mount sources have been deleted are hidden** from the list rather
