@@ -121,13 +121,15 @@ describe("api", () => {
         name: "docker.io/library/debian:latest",
         creationDate: "2026-04-21T00:00:00Z",
         descriptor: { size: 8933 }
-      }
+      },
+      variants: [{ platform: { os: "linux", architecture: "arm64" }, size: 49670752 }],
     }]);
     const result = await listImages();
     expect(result[0].id).toBe("sha256:35b8ff");
-    expect(result[0].repository).toBe("docker.io/library/debian");
+    expect(result[0].repository).toBe("debian");
     expect(result[0].tag).toBe("latest");
-    expect(result[0].size).toBe("9 KB");
+    expect(result[0].size).toBe("50 MB");
+    expect(result[0].created).toBe("2026-04-21T00:00:00Z");
   });
 
   // The CLI's `image delete` takes a reference, not a digest, so the raw
@@ -139,6 +141,82 @@ describe("api", () => {
     }]);
     const result = await listImages();
     expect(result[0].reference).toBe("docker.io/library/debian:latest");
+  });
+
+  // `configuration.descriptor.size` is the size of the OCI *index* — a few KB
+  // regardless of the image. The real figure lives on the platform variant.
+  it("listImages sizes an image from its native variant, not the index", async () => {
+    mockInvoke.mockResolvedValue([{
+      id: "1",
+      configuration: { name: "debian:latest", descriptor: { size: 8933 } },
+      variants: [{ platform: { os: "linux", architecture: "arm64", variant: "v8" }, size: 49670752 }],
+    }]);
+    const result = await listImages();
+    expect(result[0].size).toBe("50 MB");
+  });
+
+  it("listImages picks the arm64 variant out of a multi-arch image", async () => {
+    mockInvoke.mockResolvedValue([{
+      id: "1",
+      configuration: { name: "postgres:latest", descriptor: { size: 10229 } },
+      variants: [
+        { platform: { os: "linux", architecture: "amd64" }, size: 162365458 },
+        { platform: { os: "unknown", architecture: "unknown" }, size: 6010555 },
+        { platform: { os: "linux", architecture: "arm64", variant: "v8" }, size: 160971905 },
+        { platform: { os: "linux", architecture: "s390x" }, size: 177019044 },
+      ],
+    }]);
+    const result = await listImages();
+    expect(result[0].size).toBe("161 MB");
+  });
+
+  it("listImages falls back to another linux variant when there is no arm64", async () => {
+    mockInvoke.mockResolvedValue([{
+      id: "1",
+      configuration: { name: "old:latest", descriptor: { size: 500 } },
+      variants: [
+        { platform: { os: "unknown", architecture: "unknown" }, size: 6010555 },
+        { platform: { os: "linux", architecture: "amd64" }, size: 12000000 },
+      ],
+    }]);
+    const result = await listImages();
+    expect(result[0].size).toBe("12 MB");
+  });
+
+  it("listImages shows no size rather than the index size when no variant fits", async () => {
+    mockInvoke.mockResolvedValue([{
+      id: "1",
+      configuration: { name: "weird:latest", descriptor: { size: 8933 } },
+      variants: [{ platform: { os: "unknown", architecture: "unknown" }, size: 6010555 }],
+    }]);
+    const result = await listImages();
+    expect(result[0].size).toBe("—");
+  });
+
+  it("listImages formats sizes past a gigabyte as GB", async () => {
+    mockInvoke.mockResolvedValue([{
+      id: "1",
+      configuration: { name: "big:latest", descriptor: { size: 500 } },
+      variants: [{ platform: { os: "linux", architecture: "arm64" }, size: 2_500_000_000 }],
+    }]);
+    const result = await listImages();
+    expect(result[0].size).toBe("2.5 GB");
+  });
+
+  // The CLI itself prints "debian", not "docker.io/library/debian".
+  it("listImages shortens Docker Hub names for display but keeps the reference", async () => {
+    mockInvoke.mockResolvedValue([
+      { id: "1", configuration: { name: "docker.io/library/debian:latest", descriptor: { size: 1 } } },
+      { id: "2", configuration: { name: "docker.io/joeshirey/thing:v1", descriptor: { size: 1 } } },
+      { id: "3", configuration: { name: "ghcr.io/astral-sh/uv:0.11.3", descriptor: { size: 1 } } },
+    ]);
+    const result = await listImages();
+    expect(result[0].repository).toBe("debian");
+    expect(result[0].reference).toBe("docker.io/library/debian:latest");
+    expect(result[1].repository).toBe("joeshirey/thing");
+    expect(result[1].reference).toBe("docker.io/joeshirey/thing:v1");
+    // Other registries stay fully qualified, exactly as the CLI shows them.
+    expect(result[2].repository).toBe("ghcr.io/astral-sh/uv");
   });
 
   // A registry port contains a colon, so the tag separator is the last colon

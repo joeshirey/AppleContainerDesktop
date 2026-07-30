@@ -156,7 +156,11 @@ Select one for four tabs:
 
 **+ Run** opens a dialog for image, name, ports, env vars, CPUs, and memory.
 
-**Images** — list, run, remove, prune unused, and pull by name.
+**Images** — list, run, remove, prune unused, and pull by name. Names are shortened the
+way the CLI shortens them, so a Docker Hub image reads as `debian` rather than
+`docker.io/library/debian`; every action still uses the fully qualified reference. Sizes
+are the compressed download size of the arm64 variant, the only real figure the CLI's
+metadata records — the unpacked footprint on disk is larger.
 
 **Docker Hub** — search Hub without leaving the app; official images are badged and sorted
 first, then by pull count. Pick a tag and pull it.
@@ -231,14 +235,10 @@ them. The original generated artwork is kept at [docs/app-icon-source.jpg](docs/
 
 Being honest about what isn't done:
 
-- **Image sizes are wrong.** The list reads `descriptor.size`, which is the size of the OCI
-  index — a few kilobytes — not of the image. Debian shows as "9 KB".
 - **No volumes or networks UI**, though `container` has full CRUD for both.
 - **No shell into a container machine.** `container machine run` is the main thing you'd
   want a machine for, and the Machines tab can't do it. `machine set` and `machine logs`
   are missing too.
-- **Image names show the full registry path**, so a Docker Hub image reads as
-  `docker.io/library/debian` rather than `debian`.
 - **Containers whose bind-mount sources have been deleted are hidden** from the list rather
   than shown as broken.
 - **Hub search uses a deprecated Docker Hub endpoint** that may stop working.

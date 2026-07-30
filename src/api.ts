@@ -21,9 +21,35 @@ function normalizeContainer(raw: any): Container {
 
 function formatSize(bytes: number): string {
   if (bytes === 0) return "—";
+  if (bytes >= 1_000_000_000) return `${(bytes / 1_000_000_000).toFixed(1)} GB`;
   if (bytes >= 1_000_000) return `${(bytes / 1_000_000).toFixed(0)} MB`;
   if (bytes >= 1_000) return `${(bytes / 1_000).toFixed(0)} KB`;
   return `${bytes} B`;
+}
+
+/// `container` only runs on Apple silicon, so the variant that will actually
+/// be used is always the arm64 one.
+const HOST_ARCH = "arm64";
+
+/// The download size of the variant this Mac would run.
+///
+/// `configuration.descriptor.size` is the size of the OCI index — a few KB no
+/// matter how large the image — so it is never the right number to show. A
+/// multi-arch image carries one variant per platform plus "unknown/unknown"
+/// attestation manifests, which are not images and must be skipped.
+function imageSize(raw: any): number {
+  const linux = (raw.variants ?? []).filter((v: any) => v?.platform?.os === "linux");
+  const native = linux.find((v: any) => v.platform.architecture === HOST_ARCH);
+  return (native ?? linux[0])?.size ?? 0;
+}
+
+/// Docker Hub images are conventionally written without their registry, and
+/// the CLI prints them that way too. Only affects display — every action uses
+/// the untouched `reference`.
+function shortenRepository(repository: string): string {
+  if (repository.startsWith("docker.io/library/")) return repository.slice(18);
+  if (repository.startsWith("docker.io/")) return repository.slice(10);
+  return repository;
 }
 
 function normalizeImage(raw: any): Image {
@@ -37,9 +63,9 @@ function normalizeImage(raw: any): Image {
   return {
     id: raw.id ?? "",
     reference: fullName ? (hasTag ? fullName : `${fullName}:${tag}`) : "",
-    repository,
+    repository: shortenRepository(repository),
     tag,
-    size: formatSize(raw.configuration?.descriptor?.size ?? 0),
+    size: formatSize(imageSize(raw)),
     created: raw.configuration?.creationDate ?? "",
   };
 }
