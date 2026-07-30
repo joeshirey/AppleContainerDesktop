@@ -46,7 +46,9 @@ pub fn run_cmd(args: &[&str]) -> Result<Value, CmdError> {
     let out = Command::new(container_bin())
         .args(&full)
         .output()
-        .map_err(|e| CmdError { message: format!("CLI not found: {e}") })?;
+        .map_err(|e| CmdError {
+            message: format!("CLI not found: {e}"),
+        })?;
 
     if !out.status.success() {
         return Err(CmdError {
@@ -69,8 +71,7 @@ pub fn run_cmd(args: &[&str]) -> Result<Value, CmdError> {
             message: format!("JSON parse error: {e}"),
         })
     } else {
-        Ok(serde_json::from_str(trimmed)
-            .unwrap_or_else(|_| Value::String(trimmed.to_string())))
+        Ok(serde_json::from_str(trimmed).unwrap_or_else(|_| Value::String(trimmed.to_string())))
     }
 }
 
@@ -110,7 +111,10 @@ mod tests {
             &["logs", "-n", "10", "c1"][..],
             &["machine", "run", "--name", "m", "nproc"][..],
         ] {
-            assert!(!needs_json(args), "{args:?} should not be requested as JSON");
+            assert!(
+                !needs_json(args),
+                "{args:?} should not be requested as JSON"
+            );
         }
     }
 }

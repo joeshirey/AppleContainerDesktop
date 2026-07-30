@@ -201,7 +201,10 @@ pub fn build_run_args(config: &Value, edits: &Value) -> RecreatePlan {
         push!("--network", spec);
     }
 
-    if let Some(a) = config.pointer("/platform/architecture").and_then(Value::as_str) {
+    if let Some(a) = config
+        .pointer("/platform/architecture")
+        .and_then(Value::as_str)
+    {
         push!("--arch", a.into());
     }
     if let Some(o) = config.pointer("/platform/os").and_then(Value::as_str) {
@@ -506,7 +509,13 @@ mod tests {
             "virtualization": true, "useInit": true,
         });
         let p = plan(cfg);
-        for flag in ["--read-only", "--rosetta", "--ssh", "--virtualization", "--init"] {
+        for flag in [
+            "--read-only",
+            "--rosetta",
+            "--ssh",
+            "--virtualization",
+            "--init",
+        ] {
             assert_has(&p.args, &[flag]);
         }
 
@@ -516,8 +525,18 @@ mod tests {
             "readOnly": false, "rosetta": false, "ssh": false,
             "virtualization": false, "useInit": false,
         }));
-        for flag in ["--read-only", "--rosetta", "--ssh", "--virtualization", "--init"] {
-            assert!(!off.args.iter().any(|a| a == flag), "{flag} in {:?}", off.args);
+        for flag in [
+            "--read-only",
+            "--rosetta",
+            "--ssh",
+            "--virtualization",
+            "--init",
+        ] {
+            assert!(
+                !off.args.iter().any(|a| a == flag),
+                "{flag} in {:?}",
+                off.args
+            );
         }
     }
 
@@ -558,7 +577,11 @@ mod tests {
             "image": { "reference": "nginx:latest" },
             "dns": { "nameservers": [], "options": [], "searchDomains": [] },
         }));
-        assert!(!p.args.iter().any(|a| a.starts_with("--dns")), "{:?}", p.args);
+        assert!(
+            !p.args.iter().any(|a| a.starts_with("--dns")),
+            "{:?}",
+            p.args
+        );
     }
 
     #[test]
@@ -624,7 +647,11 @@ mod tests {
         assert_has(&p.args, &["--cpus", "4"]);
         assert_has(&p.args, &["--memory", "8g"]);
         assert!(!p.args.iter().any(|a| a == "2147483648"), "{:?}", p.args);
-        assert!(!p.args.windows(2).any(|w| w == ["--cpus", "2"]), "{:?}", p.args);
+        assert!(
+            !p.args.windows(2).any(|w| w == ["--cpus", "2"]),
+            "{:?}",
+            p.args
+        );
     }
 
     #[test]

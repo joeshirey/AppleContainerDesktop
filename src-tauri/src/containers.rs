@@ -31,7 +31,10 @@ pub async fn get_hub_tags(name: String) -> Result<Value, String> {
     };
     let client = reqwest::Client::new();
     client
-        .get(format!("https://hub.docker.com/v2/repositories/{}/tags/", repo_path))
+        .get(format!(
+            "https://hub.docker.com/v2/repositories/{}/tags/",
+            repo_path
+        ))
         .query(&[("page_size", "5")])
         .header("Accept", "application/json")
         .send()
@@ -168,11 +171,7 @@ pub fn inspect_container(id: String) -> Result<Value, String> {
 #[tauri::command]
 pub fn run_container(opts: Value) -> Result<(), String> {
     let mut args = vec!["run".to_string()];
-    if opts
-        .get("detach")
-        .and_then(|v| v.as_bool())
-        .unwrap_or(true)
-    {
+    if opts.get("detach").and_then(|v| v.as_bool()).unwrap_or(true) {
         args.push("-d".to_string());
     }
     if let Some(n) = opts.get("name").and_then(|v| v.as_str()) {
@@ -497,7 +496,11 @@ fn network_users(containers: &Value, network: &str) -> Vec<String> {
             .and_then(|n| n.as_array())
             .map(|nets| {
                 nets.iter()
-                    .filter_map(|n| n.get("network").and_then(|v| v.as_str()).map(str::to_string))
+                    .filter_map(|n| {
+                        n.get("network")
+                            .and_then(|v| v.as_str())
+                            .map(str::to_string)
+                    })
                     .collect()
             })
             .unwrap_or_default()
@@ -578,7 +581,10 @@ fn annotate_networks(networks: Value, containers: &Value) -> Value {
             .and_then(|s| s.as_str())
             .unwrap_or_default();
         vec![
-            ("inUseBy".to_string(), json!(network_users(containers, name))),
+            (
+                "inUseBy".to_string(),
+                json!(network_users(containers, name)),
+            ),
             ("isBuiltin".to_string(), json!(is_builtin_network(n))),
         ]
     })
@@ -627,11 +633,7 @@ pub fn list_networks() -> Result<Value, String> {
 }
 
 #[tauri::command]
-pub fn create_network(
-    name: String,
-    subnet: Option<String>,
-    internal: bool,
-) -> Result<(), String> {
+pub fn create_network(name: String, subnet: Option<String>, internal: bool) -> Result<(), String> {
     let args = network_create_args(&name, subnet.as_deref(), internal);
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
     run_cmd(&refs).map(|_| ()).map_err(|e| e.message)
@@ -732,7 +734,15 @@ mod tests {
         let args = machine_set_args("m1", Some(4), Some("8G"), Some("ro"));
         assert_eq!(
             args,
-            vec!["machine", "set", "--name", "m1", "cpus=4", "memory=8G", "home-mount=ro"]
+            vec![
+                "machine",
+                "set",
+                "--name",
+                "m1",
+                "cpus=4",
+                "memory=8G",
+                "home-mount=ro"
+            ]
         );
     }
 
@@ -751,7 +761,10 @@ mod tests {
 
     #[test]
     fn machine_logs_args_default_to_the_stdio_log() {
-        assert_eq!(machine_logs_args("m1", "100", false), vec!["machine", "logs", "-n", "100", "m1"]);
+        assert_eq!(
+            machine_logs_args("m1", "100", false),
+            vec!["machine", "logs", "-n", "100", "m1"]
+        );
     }
 
     #[test]
@@ -764,7 +777,10 @@ mod tests {
 
     #[test]
     fn volume_create_args_names_the_volume() {
-        assert_eq!(volume_create_args("data", None), vec!["volume", "create", "data"]);
+        assert_eq!(
+            volume_create_args("data", None),
+            vec!["volume", "create", "data"]
+        );
     }
 
     #[test]
@@ -777,14 +793,24 @@ mod tests {
 
     #[test]
     fn network_create_args_names_the_network() {
-        assert_eq!(network_create_args("web", None, false), vec!["network", "create", "web"]);
+        assert_eq!(
+            network_create_args("web", None, false),
+            vec!["network", "create", "web"]
+        );
     }
 
     #[test]
     fn network_create_args_carries_subnet_and_internal() {
         assert_eq!(
             network_create_args("web", Some("10.1.0.0/24"), true),
-            vec!["network", "create", "--internal", "--subnet", "10.1.0.0/24", "web"]
+            vec![
+                "network",
+                "create",
+                "--internal",
+                "--subnet",
+                "10.1.0.0/24",
+                "web"
+            ]
         );
     }
 
@@ -816,7 +842,10 @@ mod tests {
             container_using("c2", "other", "default"),
             container_using("c3", "data", "default"),
         ]);
-        assert_eq!(volume_users(&cs, "data"), vec!["c1".to_string(), "c3".to_string()]);
+        assert_eq!(
+            volume_users(&cs, "data"),
+            vec!["c1".to_string(), "c3".to_string()]
+        );
     }
 
     // A bind mount has a host path but no `type.volume`, and must never be
@@ -895,7 +924,8 @@ mod tests {
 
     #[test]
     fn annotate_volumes_leaves_disk_use_absent_when_the_image_is_gone() {
-        let volumes = json!([{ "id": "data", "configuration": { "name": "data", "source": GONE } }]);
+        let volumes =
+            json!([{ "id": "data", "configuration": { "name": "data", "source": GONE } }]);
         let out = annotate_volumes(volumes, &json!([]));
         assert_eq!(out[0]["inUseBy"], json!([]));
         assert!(out[0].get("diskUsageBytes").is_none());
