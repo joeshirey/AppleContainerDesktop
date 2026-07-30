@@ -130,6 +130,42 @@ describe("api", () => {
     expect(result[0].size).toBe("9 KB");
   });
 
+  // The CLI's `image delete` takes a reference, not a digest, so the raw
+  // `configuration.name` has to survive normalization intact.
+  it("listImages keeps the full image reference for the CLI to act on", async () => {
+    mockInvoke.mockResolvedValue([{
+      id: "sha256:35b8ff",
+      configuration: { name: "docker.io/library/debian:latest", descriptor: { size: 8933 } }
+    }]);
+    const result = await listImages();
+    expect(result[0].reference).toBe("docker.io/library/debian:latest");
+  });
+
+  // A registry port contains a colon, so the tag separator is the last colon
+  // *after* the last slash — not simply the last colon.
+  it("listImages does not mistake a registry port for a tag", async () => {
+    mockInvoke.mockResolvedValue([
+      { id: "1", configuration: { name: "localhost:5000/myapp", descriptor: { size: 100 } } },
+      { id: "2", configuration: { name: "localhost:5000/myapp:v2", descriptor: { size: 100 } } },
+    ]);
+    const result = await listImages();
+    expect(result[0].repository).toBe("localhost:5000/myapp");
+    expect(result[0].tag).toBe("latest");
+    expect(result[0].reference).toBe("localhost:5000/myapp:latest");
+    expect(result[1].repository).toBe("localhost:5000/myapp");
+    expect(result[1].tag).toBe("v2");
+    expect(result[1].reference).toBe("localhost:5000/myapp:v2");
+  });
+
+  it("listImages falls back to repository:tag when the name has no tag", async () => {
+    mockInvoke.mockResolvedValue([{
+      id: "sha256:aaa",
+      configuration: { name: "windharbor-base", descriptor: { size: 375 } }
+    }]);
+    const result = await listImages();
+    expect(result[0].reference).toBe("windharbor-base:latest");
+  });
+
   // pruneImages
   it("pruneImages calls invoke with prune_images", async () => {
     mockInvoke.mockResolvedValue(undefined);
@@ -138,10 +174,12 @@ describe("api", () => {
   });
 
   // removeImage
-  it("removeImage calls invoke with remove_image and id", async () => {
+  it("removeImage calls invoke with remove_image and a reference", async () => {
     mockInvoke.mockResolvedValue(undefined);
-    await removeImage("sha256:abc");
-    expect(mockInvoke).toHaveBeenCalledWith("remove_image", { id: "sha256:abc" });
+    await removeImage("docker.io/library/debian:latest");
+    expect(mockInvoke).toHaveBeenCalledWith("remove_image", {
+      reference: "docker.io/library/debian:latest",
+    });
   });
 
   // pullImage

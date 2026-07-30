@@ -15,6 +15,8 @@ export interface ContainerStats {
 
 export interface Image {
   id: string;
+  /// The name the CLI answers to — `image delete` and `run` take this, not `id`.
+  reference: string;
   repository: string;
   tag: string;
   size: string;

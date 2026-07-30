@@ -34,9 +34,9 @@ export function ImagesView() {
     );
   }, [images, filter]);
 
-  async function handleRemove(id: string) {
+  async function handleRemove(reference: string) {
     try {
-      await removeImage(id);
+      await removeImage(reference);
       await fetchImages();
     } catch (e: any) {
       setError(String(e?.message ?? e));
@@ -90,10 +90,10 @@ export function ImagesView() {
             <span className={styles.meta}>{img.size}</span>
             <span className={styles.meta}>{formatDate(img.created)}</span>
             <div className={styles.actions}>
-              <button className={styles.actBtn} onClick={() => setRunImage(img.repository + ":" + img.tag)}>Run</button>
+              <button className={styles.actBtn} onClick={() => setRunImage(img.reference)}>Run</button>
               {confirmRemove === img.id ? (
                 <>
-                  <button className={styles.actBtnDanger} onClick={() => handleRemove(img.id)}>Confirm Remove</button>
+                  <button className={styles.actBtnDanger} onClick={() => handleRemove(img.reference)}>Confirm Remove</button>
                   <button className={styles.actBtn} onClick={() => setConfirmRemove(null)}>Cancel</button>
                 </>
               ) : (

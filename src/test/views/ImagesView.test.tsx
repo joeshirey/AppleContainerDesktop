@@ -17,8 +17,9 @@ vi.mock("../../panels/PullModal", () => ({
   ),
 }));
 vi.mock("../../panels/RunModal", () => ({
-  RunModal: ({ onClose }: any) => (
+  RunModal: ({ defaultImage, onClose }: any) => (
     <div data-testid="run-modal">
+      <span data-testid="run-image">{defaultImage}</span>
       <button onClick={onClose}>close-run</button>
     </div>
   ),
@@ -30,8 +31,8 @@ const mockRemove = vi.mocked(removeImage);
 const mockPrune = vi.mocked(pruneImages);
 
 const IMAGES = [
-  { id: "sha256:abc", repository: "nginx", tag: "latest", size: "187 MB", created: "2026-01-01T00:00:00Z" },
-  { id: "sha256:def", repository: "postgres", tag: "16", size: "432 MB", created: "2026-01-01T00:00:00Z" },
+  { id: "sha256:abc", reference: "docker.io/library/nginx:latest", repository: "nginx", tag: "latest", size: "187 MB", created: "2026-01-01T00:00:00Z" },
+  { id: "sha256:def", reference: "docker.io/library/postgres:16", repository: "postgres", tag: "16", size: "432 MB", created: "2026-01-01T00:00:00Z" },
 ];
 
 describe("ImagesView", () => {
@@ -68,21 +69,24 @@ describe("ImagesView", () => {
     await waitFor(() => expect(mockPrune).toHaveBeenCalled());
   });
 
-  it("shows Run modal with prefilled image on Run click", async () => {
+  it("shows Run modal prefilled with the full image reference on Run click", async () => {
     render(<ImagesView />);
     await waitFor(() => screen.getByText("nginx"));
     const runBtns = screen.getAllByText("Run");
     await userEvent.click(runBtns[0]);
     expect(screen.getByTestId("run-modal")).toBeInTheDocument();
+    expect(screen.getByTestId("run-image")).toHaveTextContent("docker.io/library/nginx:latest");
   });
 
-  it("shows inline remove confirmation and calls removeImage on confirm", async () => {
+  // Regression: the view used to pass img.id, and `container image delete`
+  // rejects a digest with "failed to delete one or more images".
+  it("removes by image reference rather than by digest", async () => {
     render(<ImagesView />);
     await waitFor(() => screen.getByText("nginx"));
     const removeBtns = screen.getAllByText("Remove");
     await userEvent.click(removeBtns[0]);
     expect(screen.getByText("Confirm Remove")).toBeInTheDocument();
     await userEvent.click(screen.getByText("Confirm Remove"));
-    await waitFor(() => expect(mockRemove).toHaveBeenCalledWith("sha256:abc"));
+    await waitFor(() => expect(mockRemove).toHaveBeenCalledWith("docker.io/library/nginx:latest"));
   });
 });

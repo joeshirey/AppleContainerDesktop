@@ -28,11 +28,15 @@ function formatSize(bytes: number): string {
 
 function normalizeImage(raw: any): Image {
   const fullName: string = raw.configuration?.name ?? "";
+  // A registry may carry a port ("localhost:5000/app"), so only a colon that
+  // comes after the last slash separates the tag.
   const lastColon = fullName.lastIndexOf(":");
-  const repository = lastColon > 0 ? fullName.slice(0, lastColon) : fullName;
-  const tag = lastColon > 0 ? fullName.slice(lastColon + 1) : "latest";
+  const hasTag = lastColon > 0 && lastColon > fullName.lastIndexOf("/");
+  const repository = hasTag ? fullName.slice(0, lastColon) : fullName;
+  const tag = hasTag ? fullName.slice(lastColon + 1) : "latest";
   return {
     id: raw.id ?? "",
+    reference: fullName ? (hasTag ? fullName : `${fullName}:${tag}`) : "",
     repository,
     tag,
     size: formatSize(raw.configuration?.descriptor?.size ?? 0),
@@ -64,7 +68,8 @@ export const recreateContainer = (id: string, edits: ContainerEdits): Promise<vo
   invoke("recreate_container", { id, edits });
 export const listImages = (): Promise<Image[]> =>
   invoke<any[]>("list_images").then(arr => (arr ?? []).map(normalizeImage));
-export const removeImage = (id: string): Promise<void> => invoke("remove_image", { id });
+export const removeImage = (reference: string): Promise<void> =>
+  invoke("remove_image", { reference });
 export const pullImage = (name: string): Promise<void> => invoke("pull_image", { name });
 export const pruneImages = (): Promise<void> => invoke("prune_images");
 function normalizeMachine(raw: any): Machine {

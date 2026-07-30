@@ -234,8 +234,10 @@ pub fn list_images() -> Result<Value, String> {
 }
 
 #[tauri::command]
-pub fn remove_image(id: String) -> Result<(), String> {
-    run_cmd(&["image", "rm", &id])
+/// `reference` must be a name like `docker.io/library/debian:latest`. The CLI
+/// rejects a descriptor digest here with "failed to delete one or more images".
+pub fn remove_image(reference: String) -> Result<(), String> {
+    run_cmd(&["image", "rm", &reference])
         .map(|_| ())
         .map_err(|e| e.message)
 }
