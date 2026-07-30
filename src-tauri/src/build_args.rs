@@ -105,13 +105,13 @@ pub fn build_argv(opts: &BuildOptions, dockerfile: &Path) -> Vec<String> {
     if opts.pull {
         argv.push("--pull".to_string());
     }
-    for pair in &opts.build_args {
+    for pair in opts.build_args.iter().filter(|p| !p.key.trim().is_empty()) {
         argv.push("--build-arg".to_string());
-        argv.push(format!("{}={}", pair.key, pair.value));
+        argv.push(format!("{}={}", pair.key.trim(), pair.value.trim()));
     }
-    for pair in &opts.labels {
+    for pair in opts.labels.iter().filter(|p| !p.key.trim().is_empty()) {
         argv.push("--label".to_string());
-        argv.push(format!("{}={}", pair.key, pair.value));
+        argv.push(format!("{}={}", pair.key.trim(), pair.value.trim()));
     }
     if let Some(target) = present(&opts.target) {
         argv.push("--target".to_string());
@@ -274,6 +274,47 @@ mod tests {
         assert!(argv.contains(&"builder".to_string()));
         assert!(argv.contains(&"4".to_string()));
         assert!(argv.contains(&"8G".to_string()));
+        assert_eq!(argv.last().unwrap(), "/ctx");
+    }
+
+    // Docker and BuildKit both accept a Dockerfile outside the context directory;
+    // inventing a restriction the CLI does not have would be wrong, as the
+    // falls_back_to_containerfile comment already notes.
+    #[test]
+    fn accepts_an_explicit_dockerfile_outside_the_context() {
+        let ctx = tempdir().unwrap(); // no Dockerfile inside
+        let df_dir = ctx_with("Dockerfile"); // Dockerfile in a separate dir
+        let mut o = opts(ctx.path().to_str().unwrap());
+        o.dockerfile = Some(
+            df_dir
+                .path()
+                .join("Dockerfile")
+                .to_str()
+                .unwrap()
+                .to_string(),
+        );
+        assert!(validate(&o).is_ok());
+    }
+
+    #[test]
+    fn blank_option_strings_emit_no_flags() {
+        let mut o = opts("/ctx");
+        o.target = Some("   ".to_string());
+        o.platform = Some("   ".to_string());
+        o.memory = Some("   ".to_string());
+        let argv = build_argv(&o, Path::new("/ctx/Dockerfile"));
+        assert!(
+            !argv.iter().any(|a| a == "--target"),
+            "--target should be absent"
+        );
+        assert!(
+            !argv.iter().any(|a| a == "--platform"),
+            "--platform should be absent"
+        );
+        assert!(
+            !argv.iter().any(|a| a == "--memory"),
+            "--memory should be absent"
+        );
     }
 
     fn kv(k: &str, v: &str) -> KeyValue {
