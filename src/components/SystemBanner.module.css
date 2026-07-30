@@ -2,3 +2,5 @@
 .btn { height: 26px; padding: 0 12px; background: #ff9f0a; color: white; border: none; border-radius: 6px; font-size: 0.72rem; font-weight: 600; cursor: pointer; }
 .bannerRunning { display: flex; align-items: center; justify-content: space-between; padding: 6px 16px; background: var(--green-tint-bg); border-bottom: 1px solid var(--border); font-size: 0.78rem; color: var(--green-tint-text); flex-shrink: 0; }
 .btnStop { height: 24px; padding: 0 12px; background: var(--red); color: white; border: none; border-radius: 6px; font-size: 0.72rem; font-weight: 600; cursor: pointer; }
+.bannerChecking { display: flex; align-items: center; padding: 6px 16px; background: var(--bg-subtle, #f5f5f7); border-bottom: 1px solid var(--border); font-size: 0.78rem; color: var(--text-secondary, #6e6e73); flex-shrink: 0; }
+.error { font-size: 0.78rem; color: var(--red); padding: 8px 16px; background: var(--red-tint-bg); border-bottom: 1px solid var(--red-tint-border); flex-shrink: 0; }

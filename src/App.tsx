@@ -24,29 +24,55 @@ function ActiveView({ section }: { section: NavSection }) {
   }
 }
 
+function message(e: unknown): string {
+  return e instanceof Error ? e.message : String(e);
+}
+
 export default function App() {
   const [active, setActive] = useState<NavSection>("containers");
-  const [sysRunning, setSysRunning] = useState(true);
+  // null until the first status check answers — anything else means showing a
+  // state we have not actually confirmed yet.
+  const [sysRunning, setSysRunning] = useState<boolean | null>(null);
+  const [sysError, setSysError] = useState<string | null>(null);
 
   useEffect(() => {
     checkSystemStatus()
-      .then(s => setSysRunning(!!s))
+      // The call succeeds on a stopped system too, returning a payload that
+      // says so — so the status field is what decides, not the fact it resolved.
+      .then(s => setSysRunning(s?.status?.toLowerCase() === "running"))
       .catch(() => setSysRunning(false));
   }, []);
 
   async function handleStart() {
-    try { await startSystem(); setSysRunning(true); } catch (e) { console.error('startSystem failed:', e); }
+    setSysError(null);
+    try {
+      await startSystem();
+      setSysRunning(true);
+    } catch (e) {
+      setSysError(`Could not start the container system: ${message(e)}`);
+    }
   }
 
   async function handleStop() {
-    try { await stopSystem(); setSysRunning(false); } catch (e) { console.error('stopSystem failed:', e); }
+    setSysError(null);
+    try {
+      await stopSystem();
+      setSysRunning(false);
+    } catch (e) {
+      setSysError(`Could not stop the container system: ${message(e)}`);
+    }
   }
 
   return (
     <div className={styles.app}>
       <Sidebar active={active} onSelect={setActive} />
       <div className={styles.body}>
-        <SystemBanner running={sysRunning} onStart={handleStart} onStop={handleStop} />
+        <SystemBanner
+          running={sysRunning}
+          error={sysError}
+          onStart={handleStart}
+          onStop={handleStop}
+        />
         <main className={styles.main}><ActiveView section={active} /></main>
       </div>
     </div>
