@@ -1,5 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Container, ContainerEdits, ContainerStats, HubResult, Image, Machine, MachineEdits, RecreatePlan } from "./types";
+import type {
+  Container, ContainerEdits, ContainerStats, HubResult, Image, Machine,
+  MachineEdits, Network, NetworkOptions, RecreatePlan, Volume,
+} from "./types";
 
 // The Apple container CLI returns deeply nested JSON. These helpers normalize
 // the raw CLI output into our flat types.
@@ -172,3 +175,59 @@ export async function searchHub(query: string): Promise<HubResult[]> {
 }
 export const getHubTags = (name: string): Promise<{ results: { name: string }[] }> =>
   invoke("get_hub_tags", { name });
+
+function normalizeVolume(raw: any): Volume {
+  const cfg = raw.configuration ?? {};
+  return {
+    name: cfg.name ?? raw.id ?? "",
+    driver: cfg.driver ?? "",
+    format: cfg.format ?? "",
+    provisioned: formatSize(cfg.sizeInBytes ?? 0),
+    // The backend leaves this off entirely when it could not stat the image,
+    // which is a different thing from an image that occupies nothing.
+    onDisk: raw.diskUsageBytes === undefined ? "—" : formatSize(raw.diskUsageBytes),
+    source: cfg.source ?? "",
+    created: cfg.creationDate ?? "",
+    inUseBy: raw.inUseBy ?? [],
+  };
+}
+
+export const listVolumes = (): Promise<Volume[]> =>
+  invoke<any[]>("list_volumes").then(arr => (arr ?? []).map(normalizeVolume));
+
+export const createVolume = (name: string, size?: string): Promise<void> =>
+  invoke("create_volume", { name, size });
+
+export const deleteVolume = (name: string): Promise<void> =>
+  invoke("delete_volume", { name });
+
+/// Deletes every unreferenced volume and everything in them. Returns what the
+/// CLI reported reclaiming.
+export const pruneVolumes = (): Promise<string> => invoke("prune_volumes");
+
+function normalizeNetwork(raw: any): Network {
+  const cfg = raw.configuration ?? {};
+  const status = raw.status ?? {};
+  return {
+    name: cfg.name ?? raw.id ?? "",
+    mode: cfg.mode ?? "",
+    plugin: cfg.plugin ?? "",
+    subnet: status.ipv4Subnet,
+    gateway: status.ipv4Gateway,
+    subnetV6: status.ipv6Subnet,
+    created: cfg.creationDate ?? "",
+    isBuiltin: raw.isBuiltin ?? false,
+    inUseBy: raw.inUseBy ?? [],
+  };
+}
+
+export const listNetworks = (): Promise<Network[]> =>
+  invoke<any[]>("list_networks").then(arr => (arr ?? []).map(normalizeNetwork));
+
+export const createNetwork = (name: string, opts: NetworkOptions): Promise<void> =>
+  invoke("create_network", { name, subnet: opts.subnet, internal: opts.internal ?? false });
+
+export const deleteNetwork = (name: string): Promise<void> =>
+  invoke("delete_network", { name });
+
+export const pruneNetworks = (): Promise<string> => invoke("prune_networks");

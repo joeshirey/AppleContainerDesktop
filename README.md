@@ -3,8 +3,8 @@
 A native macOS desktop GUI for [Apple's `container`](https://github.com/apple/container) CLI.
 
 `container` is a good tool with no graphical front end. This puts one on top of it: a
-sidebar of your containers, images, and VMs, with logs, a shell, and an editable settings
-panel behind each one. It shells out to the `container` binary you already have installed
+sidebar of your containers, images, VMs, volumes, and networks, with logs, a shell, and
+an editable settings panel behind each one. It shells out to the `container` binary you already have installed
 and parses its JSON output — there is no daemon, no socket, and no second source of truth.
 Anything you do here you could have done at the prompt.
 
@@ -198,6 +198,23 @@ stop, delete, and set the default machine. Selecting one gives it four tabs:
   via `container machine set`. Only fields you change are sent. The CLI reads these at boot,
   so the panel says plainly that the machine has to be restarted before they take effect.
 
+**Volumes** — create, delete, and prune, with two size columns rather than one.
+`container volume ls` reports a single `sizeInBytes`, and it is the sparse image's
+provisioned ceiling: a 512 GB volume holding a small database reads as 512 GB while
+occupying a few hundred MB. The table shows that ceiling next to the blocks actually
+allocated, so **On disk** is the number that answers "what is this costing me". Each
+volume also lists the containers mounting it; the CLI refuses to delete a mounted
+volume, so Delete is disabled there rather than offered and then failing.
+
+> Pruning volumes destroys their contents, not just their bookkeeping. The button
+> says so before it does anything.
+
+**Networks** — create, delete, and prune, showing each network's subnet, gateway, and
+mode, plus the containers attached to it. A new network can take a subnet and can be
+made host-only (`--internal`), which shows up afterwards as mode `hostOnly`. The
+`default` network is marked **Built-in** and has no Delete button at all, because
+`container network delete default` fails outright.
+
 **Settings** — poll interval and default log line count, persisted to `.settings.json`.
 
 A banner across the top reports whether the container system is running and offers to start
@@ -206,9 +223,9 @@ or stop it.
 ## Development
 
 ```sh
-npm test                    # 132 frontend tests (Vitest + Testing Library)
+npm test                    # 159 frontend tests (Vitest + Testing Library)
 npm run test:watch
-cd src-tauri && cargo test  # 46 Rust tests
+cd src-tauri && cargo test  # 63 Rust tests
 npm run build               # tsc + vite, the typecheck gate
 ```
 
@@ -250,7 +267,17 @@ them. The original generated artwork is kept at [docs/app-icon-source.jpg](docs/
 
 Being honest about what isn't done:
 
-- **No volumes or networks UI**, though `container` has full CRUD for both.
+- **No image building.** `container build` and `container builder` are not exposed, so
+  a Dockerfile in front of you still means dropping to the terminal.
+- **No registry logins.** `container registry login` is not wired up, so private
+  registries only work if you have already authenticated at the prompt.
+- **No file copy in or out.** `container cp` and `container export` are missing.
+- **No CI.** There is no workflow in `.github/`, so the four gates below are only ever
+  run by whoever is committing. They are expected to pass, but nothing enforces it.
+- **Volume and network creation is deliberately partial.** Labels, driver options, the
+  network plugin, and IPv6 prefixes are all left at the CLI's defaults; the panels
+  expose size, subnet, and host-only because those are the ones that change behaviour
+  you can see.
 
 ## License
 

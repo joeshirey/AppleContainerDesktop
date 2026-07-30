@@ -71,7 +71,50 @@ export interface HubResult {
   starCount: number;
 }
 
-export type NavSection = "containers" | "images" | "hub" | "machines" | "settings";
+export interface Volume {
+  name: string;
+  driver: string;
+  format: string;
+  /// The ceiling the sparse image was created with — not disk consumed.
+  provisioned: string;
+  /// Blocks actually allocated. "—" when the image could not be read.
+  onDisk: string;
+  /// Where the image lives on the host.
+  source: string;
+  created: string;
+  /// Containers mounting this volume. `volume delete` fails while non-empty.
+  inUseBy: string[];
+}
+
+export interface Network {
+  name: string;
+  mode: string;
+  plugin: string;
+  subnet?: string;
+  gateway?: string;
+  subnetV6?: string;
+  created: string;
+  /// A network the CLI owns. `network delete` refuses to touch one.
+  isBuiltin: boolean;
+  /// Containers attached to this network.
+  inUseBy: string[];
+}
+
+/// Settings `container network create` accepts. Everything else it offers
+/// (plugins, IPv6 prefixes, labels) is left at the CLI's default.
+export interface NetworkOptions {
+  subnet?: string;
+  internal?: boolean;
+}
+
+export type NavSection =
+  | "containers"
+  | "images"
+  | "hub"
+  | "machines"
+  | "volumes"
+  | "networks"
+  | "settings";
 
 export interface Settings {
   pollInterval: number;    // milliseconds, default 5000

@@ -19,17 +19,25 @@ fn container_bin() -> std::path::PathBuf {
     std::path::PathBuf::from("container")
 }
 
-/// Run `container <args>`, appending --format json for list commands.
-/// Returns parsed JSON on success.
-pub fn run_cmd(args: &[&str]) -> Result<Value, CmdError> {
+/// Whether this command should be asked for JSON rather than its default
+/// human-readable table.
+fn needs_json(args: &[&str]) -> bool {
     let json_prefixes: &[&[&str]] = &[
         &["ls"],
         &["image", "ls"],
         &["machine", "ls"],
+        &["volume", "ls"],
+        &["network", "ls"],
         &["stats"],
         &["system", "status"],
     ];
-    let needs_json = json_prefixes.iter().any(|p| args.starts_with(p));
+    json_prefixes.iter().any(|p| args.starts_with(p))
+}
+
+/// Run `container <args>`, appending --format json for list commands.
+/// Returns parsed JSON on success.
+pub fn run_cmd(args: &[&str]) -> Result<Value, CmdError> {
+    let needs_json = needs_json(args);
     let mut full: Vec<&str> = args.to_vec();
     if needs_json {
         full.extend_from_slice(&["--format", "json"]);
@@ -74,5 +82,35 @@ mod tests {
     fn run_cmd_errors_on_unknown_subcommand() {
         let result = run_cmd(&["__no_such_cmd__"]);
         assert!(result.is_err());
+    }
+
+    // Every list command the app parses as JSON has to be named here. Miss one
+    // and the CLI prints its human table instead, which parses as a bare string
+    // and reaches the frontend as something it cannot map over.
+    #[test]
+    fn every_list_command_asks_for_json() {
+        for args in [
+            &["ls", "-a"][..],
+            &["image", "ls"][..],
+            &["machine", "ls"][..],
+            &["volume", "ls"][..],
+            &["network", "ls"][..],
+            &["stats", "--no-stream", "c1"][..],
+            &["system", "status"][..],
+        ] {
+            assert!(needs_json(args), "{args:?} should be requested as JSON");
+        }
+    }
+
+    #[test]
+    fn commands_that_print_prose_are_left_alone() {
+        for args in [
+            &["volume", "prune"][..],
+            &["network", "create", "web"][..],
+            &["logs", "-n", "10", "c1"][..],
+            &["machine", "run", "--name", "m", "nproc"][..],
+        ] {
+            assert!(!needs_json(args), "{args:?} should not be requested as JSON");
+        }
     }
 }

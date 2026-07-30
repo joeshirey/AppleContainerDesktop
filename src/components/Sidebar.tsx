@@ -6,6 +6,8 @@ const ITEMS: { key: NavSection; label: string }[] = [
   { key: "images",     label: "Images" },
   { key: "hub",        label: "Hub Search" },
   { key: "machines",   label: "Machines" },
+  { key: "volumes",    label: "Volumes" },
+  { key: "networks",   label: "Networks" },
 ];
 
 export function Sidebar({ active, onSelect }: { active: NavSection; onSelect: (s: NavSection) => void }) {

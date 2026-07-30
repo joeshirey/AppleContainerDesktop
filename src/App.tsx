@@ -5,6 +5,8 @@ import { ContainersView } from "./views/ContainersView";
 import { ImagesView }    from "./views/ImagesView";
 import { HubSearchView } from "./views/HubSearchView";
 import { MachinesView }  from "./views/MachinesView";
+import { VolumesView }   from "./views/VolumesView";
+import { NetworksView }  from "./views/NetworksView";
 import { SettingsView }  from "./views/SettingsView";
 import { checkSystemStatus, startSystem, stopSystem } from "./api";
 import type { NavSection } from "./types";
@@ -16,6 +18,8 @@ function ActiveView({ section }: { section: NavSection }) {
     case "images":     return <ImagesView />;
     case "hub":        return <HubSearchView />;
     case "machines":   return <MachinesView />;
+    case "volumes":    return <VolumesView />;
+    case "networks":   return <NetworksView />;
     case "settings":   return <SettingsView />;
   }
 }

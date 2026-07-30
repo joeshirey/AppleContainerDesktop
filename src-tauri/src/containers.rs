@@ -415,6 +415,242 @@ pub fn set_machine_config(
     run_cmd(&refs).map(|_| ()).map_err(|e| e.message)
 }
 
+/// Bytes actually allocated on disk, or `None` if the path cannot be read.
+///
+/// A volume is an ext4 image created sparse, so `sizeInBytes` in the CLI's
+/// output is the ceiling it was provisioned with and not what it occupies —
+/// a 512 GB volume holding a small database takes up a few hundred MB. Only
+/// the block count says how much disk is really gone.
+fn allocated_bytes(path: &str) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    // `blocks()` is in 512-byte units regardless of the filesystem's own
+    // block size — that is the unit stat(2) defines, not a filesystem detail.
+    std::fs::metadata(path).ok().map(|m| m.blocks() * 512)
+}
+
+fn volume_create_args(name: &str, size: Option<&str>) -> Vec<String> {
+    let mut args = vec!["volume".to_string(), "create".to_string()];
+    if let Some(s) = size {
+        args.extend_from_slice(&["-s".to_string(), s.to_string()]);
+    }
+    args.push(name.to_string());
+    args
+}
+
+fn network_create_args(name: &str, subnet: Option<&str>, internal: bool) -> Vec<String> {
+    let mut args = vec!["network".to_string(), "create".to_string()];
+    if internal {
+        args.push("--internal".to_string());
+    }
+    if let Some(s) = subnet {
+        args.extend_from_slice(&["--subnet".to_string(), s.to_string()]);
+    }
+    args.push(name.to_string());
+    args
+}
+
+/// Every container in `containers` for which `pick` yields a name equal to `want`.
+fn users_of<F>(containers: &Value, want: &str, pick: F) -> Vec<String>
+where
+    F: Fn(&Value) -> Vec<String>,
+{
+    let Some(arr) = containers.as_array() else {
+        return Vec::new();
+    };
+    arr.iter()
+        .filter(|c| pick(c).iter().any(|n| n == want))
+        .filter_map(|c| c.get("id").and_then(|v| v.as_str()).map(str::to_string))
+        .collect()
+}
+
+/// Containers mounting the named volume.
+///
+/// A named volume is distinguished from a bind mount by `type.volume`: both
+/// carry a host `source`, so the mount type is the only thing that separates
+/// a volume called "data" from a bind mount of a host directory `/data`.
+fn volume_users(containers: &Value, volume: &str) -> Vec<String> {
+    users_of(containers, volume, |c| {
+        c.get("configuration")
+            .and_then(|c| c.get("mounts"))
+            .and_then(|m| m.as_array())
+            .map(|mounts| {
+                mounts
+                    .iter()
+                    .filter_map(|m| {
+                        m.get("type")?
+                            .get("volume")?
+                            .get("name")?
+                            .as_str()
+                            .map(str::to_string)
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
+}
+
+/// Containers attached to the named network.
+fn network_users(containers: &Value, network: &str) -> Vec<String> {
+    users_of(containers, network, |c| {
+        c.get("configuration")
+            .and_then(|c| c.get("networks"))
+            .and_then(|n| n.as_array())
+            .map(|nets| {
+                nets.iter()
+                    .filter_map(|n| n.get("network").and_then(|v| v.as_str()).map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default()
+    })
+}
+
+/// The label the CLI puts on the networks it manages itself.
+const BUILTIN_ROLE_LABEL: &str = "com.apple.container.resource.role";
+
+/// `container network delete default` fails outright with "cannot delete a
+/// builtin network", so the UI needs to know not to offer it.
+fn is_builtin_network(network: &Value) -> bool {
+    network
+        .get("configuration")
+        .and_then(|c| c.get("labels"))
+        .and_then(|l| l.get(BUILTIN_ROLE_LABEL))
+        .and_then(|v| v.as_str())
+        == Some("builtin")
+}
+
+/// Add to each element the fields computed by `extra`, leaving a non-array
+/// payload (an error object, say) untouched.
+fn annotate_each<F>(raw: Value, extra: F) -> Value
+where
+    F: Fn(&Value) -> Vec<(String, Value)>,
+{
+    let Some(arr) = raw.as_array() else {
+        return raw;
+    };
+    Value::Array(
+        arr.iter()
+            .map(|item| match item.as_object() {
+                Some(obj) => {
+                    let mut obj = obj.clone();
+                    obj.extend(extra(item));
+                    Value::Object(obj)
+                }
+                None => item.clone(),
+            })
+            .collect(),
+    )
+}
+
+/// Tag each volume with the containers holding it and its real disk footprint.
+///
+/// `diskUsageBytes` is left off entirely when the image cannot be read, so the
+/// UI can tell "nothing allocated" apart from "we could not find out".
+fn annotate_volumes(volumes: Value, containers: &Value) -> Value {
+    annotate_each(volumes, |v| {
+        let name = v
+            .get("configuration")
+            .and_then(|c| c.get("name"))
+            .or_else(|| v.get("id"))
+            .and_then(|n| n.as_str())
+            .unwrap_or_default();
+        let used = allocated_bytes(
+            v.get("configuration")
+                .and_then(|c| c.get("source"))
+                .and_then(|s| s.as_str())
+                .unwrap_or_default(),
+        );
+        let mut fields = vec![("inUseBy".to_string(), json!(volume_users(containers, name)))];
+        if let Some(bytes) = used {
+            fields.push(("diskUsageBytes".to_string(), json!(bytes)));
+        }
+        fields
+    })
+}
+
+/// Tag each network with the containers attached to it and whether it is one
+/// the CLI owns.
+fn annotate_networks(networks: Value, containers: &Value) -> Value {
+    annotate_each(networks, |n| {
+        let name = n
+            .get("configuration")
+            .and_then(|c| c.get("name"))
+            .or_else(|| n.get("id"))
+            .and_then(|s| s.as_str())
+            .unwrap_or_default();
+        vec![
+            ("inUseBy".to_string(), json!(network_users(containers, name))),
+            ("isBuiltin".to_string(), json!(is_builtin_network(n))),
+        ]
+    })
+}
+
+/// The containers to check volume and network references against.
+///
+/// A failure here is not fatal: it only means nothing can be reported as in
+/// use, which is better than refusing to list volumes at all.
+fn containers_or_empty() -> Value {
+    run_cmd(&["ls", "-a"]).unwrap_or_else(|_| json!([]))
+}
+
+#[tauri::command]
+pub fn list_volumes() -> Result<Value, String> {
+    let raw = run_cmd(&["volume", "ls"]).map_err(|e| e.message)?;
+    Ok(annotate_volumes(raw, &containers_or_empty()))
+}
+
+#[tauri::command]
+pub fn create_volume(name: String, size: Option<String>) -> Result<(), String> {
+    let args = volume_create_args(&name, size.as_deref());
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    run_cmd(&refs).map(|_| ()).map_err(|e| e.message)
+}
+
+#[tauri::command]
+pub fn delete_volume(name: String) -> Result<(), String> {
+    run_cmd(&["volume", "delete", &name])
+        .map(|_| ())
+        .map_err(|e| e.message)
+}
+
+/// Delete every volume no container references. Destroys their contents.
+#[tauri::command]
+pub fn prune_volumes() -> Result<String, String> {
+    run_cmd(&["volume", "prune"])
+        .map(text_output)
+        .map_err(|e| e.message)
+}
+
+#[tauri::command]
+pub fn list_networks() -> Result<Value, String> {
+    let raw = run_cmd(&["network", "ls"]).map_err(|e| e.message)?;
+    Ok(annotate_networks(raw, &containers_or_empty()))
+}
+
+#[tauri::command]
+pub fn create_network(
+    name: String,
+    subnet: Option<String>,
+    internal: bool,
+) -> Result<(), String> {
+    let args = network_create_args(&name, subnet.as_deref(), internal);
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    run_cmd(&refs).map(|_| ()).map_err(|e| e.message)
+}
+
+#[tauri::command]
+pub fn delete_network(name: String) -> Result<(), String> {
+    run_cmd(&["network", "delete", &name])
+        .map(|_| ())
+        .map_err(|e| e.message)
+}
+
+#[tauri::command]
+pub fn prune_networks() -> Result<String, String> {
+    run_cmd(&["network", "prune"])
+        .map(text_output)
+        .map_err(|e| e.message)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -524,5 +760,158 @@ mod tests {
             machine_logs_args("m1", "50", true),
             vec!["machine", "logs", "-n", "50", "--boot", "m1"]
         );
+    }
+
+    #[test]
+    fn volume_create_args_names_the_volume() {
+        assert_eq!(volume_create_args("data", None), vec!["volume", "create", "data"]);
+    }
+
+    #[test]
+    fn volume_create_args_passes_a_size_when_one_was_asked_for() {
+        assert_eq!(
+            volume_create_args("data", Some("10G")),
+            vec!["volume", "create", "-s", "10G", "data"]
+        );
+    }
+
+    #[test]
+    fn network_create_args_names_the_network() {
+        assert_eq!(network_create_args("web", None, false), vec!["network", "create", "web"]);
+    }
+
+    #[test]
+    fn network_create_args_carries_subnet_and_internal() {
+        assert_eq!(
+            network_create_args("web", Some("10.1.0.0/24"), true),
+            vec!["network", "create", "--internal", "--subnet", "10.1.0.0/24", "web"]
+        );
+    }
+
+    /// A container mounting a named volume, as `container ls -a` reports it.
+    fn container_using(id: &str, volume: &str, network: &str) -> Value {
+        json!({
+            "id": id,
+            "configuration": {
+                "mounts": [{
+                    "destination": "/data",
+                    "source": "/some/path/volume.img",
+                    "type": { "volume": { "name": volume, "format": "ext4" } }
+                }],
+                "networks": [{ "network": network }]
+            }
+        })
+    }
+
+    #[test]
+    fn a_volume_no_container_mounts_has_no_users() {
+        let cs = json!([container_using("c1", "other", "default")]);
+        assert!(volume_users(&cs, "data").is_empty());
+    }
+
+    #[test]
+    fn volume_users_names_every_container_mounting_it() {
+        let cs = json!([
+            container_using("c1", "data", "default"),
+            container_using("c2", "other", "default"),
+            container_using("c3", "data", "default"),
+        ]);
+        assert_eq!(volume_users(&cs, "data"), vec!["c1".to_string(), "c3".to_string()]);
+    }
+
+    // A bind mount has a host path but no `type.volume`, and must never be
+    // mistaken for a named volume of the same name.
+    #[test]
+    fn a_bind_mount_is_not_a_volume_user() {
+        let cs = json!([{
+            "id": "c1",
+            "configuration": { "mounts": [{ "source": "/data", "type": { "virtiofs": {} } }] }
+        }]);
+        assert!(volume_users(&cs, "data").is_empty());
+    }
+
+    #[test]
+    fn network_users_names_every_container_attached() {
+        let cs = json!([
+            container_using("c1", "v", "default"),
+            container_using("c2", "v", "web"),
+        ]);
+        assert_eq!(network_users(&cs, "default"), vec!["c1".to_string()]);
+        assert_eq!(network_users(&cs, "web"), vec!["c2".to_string()]);
+    }
+
+    // `container network delete default` fails with "cannot delete a builtin
+    // network", so the UI needs to know before offering the button.
+    #[test]
+    fn the_role_label_marks_a_builtin_network() {
+        let net = json!({
+            "id": "default",
+            "configuration": { "labels": { "com.apple.container.resource.role": "builtin" } }
+        });
+        assert!(is_builtin_network(&net));
+    }
+
+    #[test]
+    fn a_user_created_network_is_not_builtin() {
+        let net = json!({ "id": "web", "configuration": { "labels": {} } });
+        assert!(!is_builtin_network(&net));
+        assert!(!is_builtin_network(&json!({ "id": "web" })));
+    }
+
+    #[test]
+    fn a_path_that_does_not_exist_has_no_allocation() {
+        assert_eq!(allocated_bytes(GONE), None);
+    }
+
+    // The whole reason this function exists: a volume image is sparse, so its
+    // apparent length is the provisioned ceiling and says nothing about disk use.
+    #[test]
+    fn allocation_of_a_sparse_file_is_far_below_its_length() {
+        let path = std::env::temp_dir().join("acd-sparse-test.img");
+        let f = std::fs::File::create(&path).expect("create");
+        let provisioned = 1024 * 1024 * 1024;
+        f.set_len(provisioned).expect("set_len");
+        drop(f);
+
+        let allocated = allocated_bytes(path.to_str().unwrap()).expect("allocated");
+        assert!(
+            allocated < provisioned / 100,
+            "a freshly sized sparse file allocated {allocated} of {provisioned}"
+        );
+        std::fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn annotate_volumes_records_disk_use_and_users() {
+        let volumes = json!([{
+            "id": "data",
+            "configuration": { "name": "data", "source": REAL }
+        }]);
+        let containers = json!([container_using("c1", "data", "default")]);
+        let out = annotate_volumes(volumes, &containers);
+        assert_eq!(out[0]["inUseBy"], json!(["c1"]));
+        assert!(out[0]["diskUsageBytes"].is_number());
+    }
+
+    #[test]
+    fn annotate_volumes_leaves_disk_use_absent_when_the_image_is_gone() {
+        let volumes = json!([{ "id": "data", "configuration": { "name": "data", "source": GONE } }]);
+        let out = annotate_volumes(volumes, &json!([]));
+        assert_eq!(out[0]["inUseBy"], json!([]));
+        assert!(out[0].get("diskUsageBytes").is_none());
+    }
+
+    #[test]
+    fn annotate_networks_records_users_and_builtin_status() {
+        let networks = json!([
+            { "id": "default", "configuration": { "labels": { "com.apple.container.resource.role": "builtin" } } },
+            { "id": "web", "configuration": { "labels": {} } },
+        ]);
+        let containers = json!([container_using("c1", "v", "web")]);
+        let out = annotate_networks(networks, &containers);
+        assert_eq!(out[0]["isBuiltin"], json!(true));
+        assert_eq!(out[0]["inUseBy"], json!([]));
+        assert_eq!(out[1]["isBuiltin"], json!(false));
+        assert_eq!(out[1]["inUseBy"], json!(["c1"]));
     }
 }

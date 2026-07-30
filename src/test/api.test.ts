@@ -26,6 +26,14 @@ import {
   machineRun,
   getMachineLogs,
   setMachineConfig,
+  listVolumes,
+  createVolume,
+  deleteVolume,
+  pruneVolumes,
+  listNetworks,
+  createNetwork,
+  deleteNetwork,
+  pruneNetworks,
 } from "../api";
 
 /// Trimmed to the fields we read, but the names and value shapes are copied
@@ -498,5 +506,124 @@ describe("api", () => {
     expect(result[0].isDefault).toBe(true);
     expect(result[0].cpus).toBe(4);
     expect(result[0].memoryMB).toBe(4096);
+  });
+
+  /// Field names and value shapes copied from a live `container volume ls
+  /// --format json`, plus the two fields the Rust side annotates on.
+  const RAW_VOLUME = {
+    id: "pgdata",
+    configuration: {
+      creationDate: "2026-04-27T01:30:22Z",
+      driver: "local",
+      format: "ext4",
+      labels: {},
+      name: "pgdata",
+      options: { size: "512G" },
+      sizeInBytes: 549755813888,
+      source: "/Users/me/Library/Application Support/com.apple.container/volumes/pgdata/volume.img",
+    },
+    inUseBy: ["db"],
+    diskUsageBytes: 137400000,
+  };
+
+  it("listVolumes flattens the CLI's nested volume JSON", async () => {
+    mockInvoke.mockResolvedValue([RAW_VOLUME]);
+    const [v] = await listVolumes();
+    expect(v.name).toBe("pgdata");
+    expect(v.driver).toBe("local");
+    expect(v.format).toBe("ext4");
+    expect(v.source).toBe(RAW_VOLUME.configuration.source);
+    expect(v.inUseBy).toEqual(["db"]);
+  });
+
+  // The single most misleading number in the CLI's output: a volume image is
+  // sparse, so its declared size is a ceiling, not consumption.
+  it("listVolumes keeps provisioned size and real disk use apart", async () => {
+    mockInvoke.mockResolvedValue([RAW_VOLUME]);
+    const [v] = await listVolumes();
+    expect(v.provisioned).toBe("549.8 GB");
+    expect(v.onDisk).toBe("137 MB");
+  });
+
+  it("listVolumes reports unknown disk use rather than guessing zero", async () => {
+    mockInvoke.mockResolvedValue([{ ...RAW_VOLUME, diskUsageBytes: undefined }]);
+    const [v] = await listVolumes();
+    expect(v.onDisk).toBe("—");
+  });
+
+  it("createVolume sends the name, and a size only when one was given", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+    await createVolume("data", "10G");
+    expect(mockInvoke).toHaveBeenCalledWith("create_volume", { name: "data", size: "10G" });
+    await createVolume("data");
+    expect(mockInvoke).toHaveBeenCalledWith("create_volume", { name: "data", size: undefined });
+  });
+
+  it("deleteVolume and pruneVolumes call their commands", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+    await deleteVolume("data");
+    expect(mockInvoke).toHaveBeenCalledWith("delete_volume", { name: "data" });
+    mockInvoke.mockResolvedValue("Reclaimed 137.4 MB in disk space");
+    expect(await pruneVolumes()).toContain("Reclaimed");
+    expect(mockInvoke).toHaveBeenCalledWith("prune_volumes");
+  });
+
+  const RAW_NETWORK = {
+    id: "default",
+    configuration: {
+      creationDate: "2026-07-29T20:58:18Z",
+      labels: { "com.apple.container.resource.role": "builtin" },
+      mode: "nat",
+      name: "default",
+      options: {},
+      plugin: "container-network-vmnet",
+    },
+    status: {
+      ipv4Gateway: "192.168.64.1",
+      ipv4Subnet: "192.168.64.0/24",
+      ipv6Subnet: "fd84:d933:bb9e:f441::/64",
+    },
+    inUseBy: ["web"],
+    isBuiltin: true,
+  };
+
+  it("listNetworks flattens the CLI's nested network JSON", async () => {
+    mockInvoke.mockResolvedValue([RAW_NETWORK]);
+    const [n] = await listNetworks();
+    expect(n.name).toBe("default");
+    expect(n.mode).toBe("nat");
+    expect(n.subnet).toBe("192.168.64.0/24");
+    expect(n.gateway).toBe("192.168.64.1");
+    expect(n.isBuiltin).toBe(true);
+    expect(n.inUseBy).toEqual(["web"]);
+  });
+
+  // A network that has never come up has no `status` block at all.
+  it("listNetworks copes with a network that has no status yet", async () => {
+    mockInvoke.mockResolvedValue([{ ...RAW_NETWORK, status: undefined }]);
+    const [n] = await listNetworks();
+    expect(n.subnet).toBeUndefined();
+    expect(n.gateway).toBeUndefined();
+  });
+
+  it("createNetwork sends subnet and internal only when set", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+    await createNetwork("web", { subnet: "10.1.0.0/24", internal: true });
+    expect(mockInvoke).toHaveBeenCalledWith("create_network", {
+      name: "web", subnet: "10.1.0.0/24", internal: true,
+    });
+    await createNetwork("web", {});
+    expect(mockInvoke).toHaveBeenCalledWith("create_network", {
+      name: "web", subnet: undefined, internal: false,
+    });
+  });
+
+  it("deleteNetwork and pruneNetworks call their commands", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+    await deleteNetwork("web");
+    expect(mockInvoke).toHaveBeenCalledWith("delete_network", { name: "web" });
+    mockInvoke.mockResolvedValue("");
+    await pruneNetworks();
+    expect(mockInvoke).toHaveBeenCalledWith("prune_networks");
   });
 });
