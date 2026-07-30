@@ -10,16 +10,14 @@ an editable settings panel behind each one. It shells out to the `container` bin
 and parses its JSON output — there is no daemon, no socket, and no second source of truth.
 Anything you do here you could have done at the prompt.
 
+![The Containers view, with a running Postgres container selected and its log output on the Logs tab](docs/screenshot.png)
+
 > **Early version — build it and run it yourself.**
 > This is developer-oriented software at version 0.1. There are no prebuilt downloads and
 > no release binaries; the [supported path](#build-and-run-it-locally) is cloning the repo
 > and building it. Expect rough edges — the [Known gaps](#known-gaps) section is an honest
 > list of them. It is useful day to day, but it has not been hardened, packaged, or tested
 > anywhere beyond the machines of the people working on it.
-
-<!-- Add a screenshot here once you have one — a GUI project's README really wants one:
-![Apple Containers Desktop](docs/screenshot.png)
--->
 
 ## Requirements
 
