@@ -1,0 +1,35 @@
+version: 2
+
+# GitHub's automatic security updates already cover vulnerabilities. This adds
+# routine version bumps on top, including the action versions pinned in
+# ci.yml — those go stale silently otherwise, since nothing fails when they do.
+#
+# Minor and patch updates are grouped into one PR per ecosystem to keep the
+# volume down. Majors come through individually, because those are the ones
+# worth reading.
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      npm-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: cargo
+    directory: /src-tauri
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      cargo-minor-and-patch:
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions-minor-and-patch:
+        update-types: [minor, patch]
