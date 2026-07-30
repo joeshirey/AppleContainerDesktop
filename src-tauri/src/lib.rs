@@ -34,6 +34,9 @@ pub fn run() {
             stop_machine,
             delete_machine,
             set_default_machine,
+            machine_run,
+            get_machine_logs,
+            set_machine_config,
             search_hub,
             get_hub_tags,
         ])

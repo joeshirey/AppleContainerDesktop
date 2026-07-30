@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Container, ContainerEdits, ContainerStats, HubResult, Image, Machine, RecreatePlan } from "./types";
+import type { Container, ContainerEdits, ContainerStats, HubResult, Image, Machine, MachineEdits, RecreatePlan } from "./types";
 
 // The Apple container CLI returns deeply nested JSON. These helpers normalize
 // the raw CLI output into our flat types.
@@ -123,6 +123,24 @@ export const setDefaultMachine = (name: string): Promise<void> => invoke("set_de
 export const checkSystemStatus = (): Promise<{ status: string }> => invoke("check_system_status");
 export const startSystem = (): Promise<void> => invoke("start_system");
 export const stopSystem = (): Promise<void> => invoke("stop_system");
+/// Run a command inside a machine. The machine is booted first if it is down.
+export const machineRun = (name: string, command: string): Promise<string> =>
+  invoke("machine_run", { name, command });
+
+/// `boot` selects the machine's boot log instead of its stdio log.
+export const getMachineLogs = (name: string, lines: number, boot: boolean): Promise<string> =>
+  invoke("get_machine_logs", { name, lines, boot });
+
+/// Only the keys present are applied, and the machine has to be restarted
+/// before the new values take effect.
+export const setMachineConfig = (name: string, edits: MachineEdits): Promise<void> =>
+  invoke("set_machine_config", {
+    name,
+    cpus: edits.cpus,
+    memory: edits.memory,
+    homeMount: edits.homeMount,
+  });
+
 /// Search API v4 returns more than images: `dhi` is a Docker Hardened Image,
 /// which needs a subscription, and `extension` is a Docker Desktop extension.
 /// Neither can be pulled with `container`, so neither belongs in the results.

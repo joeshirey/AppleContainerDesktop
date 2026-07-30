@@ -23,6 +23,9 @@ import {
   deleteMachine,
   setDefaultMachine,
   searchHub,
+  machineRun,
+  getMachineLogs,
+  setMachineConfig,
 } from "../api";
 
 /// Trimmed to the fields we read, but the names and value shapes are copied
@@ -361,6 +364,59 @@ describe("api", () => {
   it("searchHub returns an empty list when the API sends no results array", async () => {
     mockInvoke.mockResolvedValue({ total: 0 });
     expect(await searchHub("xyzzy")).toEqual([]);
+  });
+
+  // machineRun / getMachineLogs / setMachineConfig
+  it("machineRun sends the command to a named machine and returns its output", async () => {
+    mockInvoke.mockResolvedValue("Linux\n");
+    const out = await machineRun("gui-dev", "uname -a | tr a-z A-Z");
+    expect(mockInvoke).toHaveBeenCalledWith("machine_run", {
+      name: "gui-dev",
+      command: "uname -a | tr a-z A-Z",
+    });
+    expect(out).toBe("Linux\n");
+  });
+
+  it("getMachineLogs asks for the stdio log by default", async () => {
+    mockInvoke.mockResolvedValue("line\n");
+    await getMachineLogs("gui-dev", 100, false);
+    expect(mockInvoke).toHaveBeenCalledWith("get_machine_logs", {
+      name: "gui-dev",
+      lines: 100,
+      boot: false,
+    });
+  });
+
+  it("getMachineLogs can ask for the boot log", async () => {
+    mockInvoke.mockResolvedValue("booting\n");
+    await getMachineLogs("gui-dev", 50, true);
+    expect(mockInvoke).toHaveBeenCalledWith("get_machine_logs", {
+      name: "gui-dev",
+      lines: 50,
+      boot: true,
+    });
+  });
+
+  it("setMachineConfig passes only the settings that were edited", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+    await setMachineConfig("gui-dev", { memory: "8G" });
+    expect(mockInvoke).toHaveBeenCalledWith("set_machine_config", {
+      name: "gui-dev",
+      cpus: undefined,
+      memory: "8G",
+      homeMount: undefined,
+    });
+  });
+
+  it("setMachineConfig passes all three settings when all were edited", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+    await setMachineConfig("gui-dev", { cpus: 4, memory: "8G", homeMount: "ro" });
+    expect(mockInvoke).toHaveBeenCalledWith("set_machine_config", {
+      name: "gui-dev",
+      cpus: 4,
+      memory: "8G",
+      homeMount: "ro",
+    });
   });
 
   // pullImage

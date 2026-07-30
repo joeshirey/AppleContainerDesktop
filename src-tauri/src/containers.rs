@@ -42,6 +42,23 @@ pub async fn get_hub_tags(name: String) -> Result<Value, String> {
         .map_err(|e| e.to_string())
 }
 
+/// The console output of a command that produces text rather than JSON.
+///
+/// `run_cmd` parses what it can, so the same output arrives as a string, as a
+/// `{"raw_output": ...}` object, or as some other JSON value depending on what
+/// the CLI printed.
+fn text_output(v: Value) -> String {
+    match &v {
+        Value::Object(m) => m
+            .get("raw_output")
+            .and_then(|s| s.as_str())
+            .unwrap_or("")
+            .to_string(),
+        Value::String(s) => s.clone(),
+        _ => v.to_string(),
+    }
+}
+
 /// Host paths this container bind-mounts that no longer exist.
 ///
 /// A mount with no host path at all (a volume, a tmpfs) is not a bind mount
@@ -118,32 +135,14 @@ pub fn remove_container(id: String) -> Result<(), String> {
 pub fn get_logs(id: String, lines: u32) -> Result<String, String> {
     let n = lines.to_string();
     run_cmd(&["logs", "-n", &n, &id])
-        .map(|v| match &v {
-            Value::Object(m) => m
-                .get("raw_output")
-                .and_then(|s| s.as_str())
-                .unwrap_or("")
-                .to_string(),
-            Value::String(s) => s.clone(),
-            _ => v.to_string(),
-        })
+        .map(text_output)
         .map_err(|e| e.message)
 }
 
 #[tauri::command]
 pub fn exec_in_container(id: String, command: String) -> Result<String, String> {
     let args = vec!["exec", id.as_str(), "/bin/sh", "-c", command.as_str()];
-    run_cmd(&args)
-        .map(|v| match &v {
-            Value::Object(m) => m
-                .get("raw_output")
-                .and_then(|s| s.as_str())
-                .unwrap_or("")
-                .to_string(),
-            Value::String(s) => s.clone(),
-            _ => v.to_string(),
-        })
-        .map_err(|e| e.message)
+    run_cmd(&args).map(text_output).map_err(|e| e.message)
 }
 
 #[tauri::command]
@@ -339,6 +338,83 @@ pub fn set_default_machine(name: String) -> Result<(), String> {
         .map_err(|e| e.message)
 }
 
+/// `container machine run` joins its arguments and evaluates the result in a
+/// shell inside the machine. So unlike `exec_in_container`, which has to spell
+/// out `/bin/sh -c`, the command goes across as a single argument — and pipes,
+/// globs, quotes, and `;` all work on the far side.
+#[tauri::command]
+pub fn machine_run(name: String, command: String) -> Result<String, String> {
+    run_cmd(&["machine", "run", "--name", &name, &command])
+        .map(text_output)
+        .map_err(|e| e.message)
+}
+
+fn machine_logs_args<'a>(name: &'a str, lines: &'a str, boot: bool) -> Vec<&'a str> {
+    let mut args = vec!["machine", "logs", "-n", lines];
+    if boot {
+        args.push("--boot");
+    }
+    args.push(name);
+    args
+}
+
+#[tauri::command]
+pub fn get_machine_logs(name: String, lines: u32, boot: bool) -> Result<String, String> {
+    let n = lines.to_string();
+    run_cmd(&machine_logs_args(&name, &n, boot))
+        .map(text_output)
+        .map_err(|e| e.message)
+}
+
+/// A `machine set` invocation, or an empty vec when nothing was edited.
+///
+/// Only the three settings the panel exposes are ever emitted, so a value from
+/// the UI can never turn into a different CLI flag.
+fn machine_set_args(
+    name: &str,
+    cpus: Option<u32>,
+    memory: Option<&str>,
+    home_mount: Option<&str>,
+) -> Vec<String> {
+    let settings: Vec<String> = [
+        cpus.map(|c| format!("cpus={c}")),
+        memory.map(|m| format!("memory={m}")),
+        home_mount.map(|h| format!("home-mount={h}")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+
+    if settings.is_empty() {
+        return Vec::new();
+    }
+    let mut args = vec![
+        "machine".to_string(),
+        "set".to_string(),
+        "--name".to_string(),
+        name.to_string(),
+    ];
+    args.extend(settings);
+    args
+}
+
+/// Apply configuration to a machine. The CLI only reads the new values when the
+/// machine next boots, which the caller is expected to say out loud.
+#[tauri::command]
+pub fn set_machine_config(
+    name: String,
+    cpus: Option<u32>,
+    memory: Option<String>,
+    home_mount: Option<String>,
+) -> Result<(), String> {
+    let args = machine_set_args(&name, cpus, memory.as_deref(), home_mount.as_deref());
+    if args.is_empty() {
+        return Ok(());
+    }
+    let refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    run_cmd(&refs).map(|_| ()).map_err(|e| e.message)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -413,5 +489,40 @@ mod tests {
     fn annotate_passes_through_a_non_array_payload() {
         let raw = json!({ "error": "nope" });
         assert_eq!(annotate_bind_mounts(raw.clone()), raw);
+    }
+
+    #[test]
+    fn machine_set_args_names_the_machine_and_writes_each_setting() {
+        let args = machine_set_args("m1", Some(4), Some("8G"), Some("ro"));
+        assert_eq!(
+            args,
+            vec!["machine", "set", "--name", "m1", "cpus=4", "memory=8G", "home-mount=ro"]
+        );
+    }
+
+    #[test]
+    fn machine_set_args_omits_settings_that_were_not_edited() {
+        assert_eq!(
+            machine_set_args("m1", None, Some("2G"), None),
+            vec!["machine", "set", "--name", "m1", "memory=2G"]
+        );
+    }
+
+    #[test]
+    fn machine_set_args_with_no_settings_has_nothing_to_apply() {
+        assert!(machine_set_args("m1", None, None, None).is_empty());
+    }
+
+    #[test]
+    fn machine_logs_args_default_to_the_stdio_log() {
+        assert_eq!(machine_logs_args("m1", "100", false), vec!["machine", "logs", "-n", "100", "m1"]);
+    }
+
+    #[test]
+    fn machine_logs_args_can_ask_for_the_boot_log() {
+        assert_eq!(
+            machine_logs_args("m1", "50", true),
+            vec!["machine", "logs", "-n", "50", "--boot", "m1"]
+        );
     }
 }

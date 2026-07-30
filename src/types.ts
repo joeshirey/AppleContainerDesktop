@@ -51,6 +51,14 @@ export interface RecreatePlan {
   unsupported: string[];
 }
 
+/// Settings `container machine set` can change. An omitted key is left alone.
+export interface MachineEdits {
+  cpus?: number;
+  memory?: string;
+  /// How the user's home directory is mounted inside the machine.
+  homeMount?: "ro" | "rw" | "none";
+}
+
 /// One pullable repository from a Docker Hub search.
 export interface HubResult {
   /// The path to pull, e.g. "library/nginx" or "grafana/grafana".

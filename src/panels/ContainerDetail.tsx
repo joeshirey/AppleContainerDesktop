@@ -97,8 +97,8 @@ export function ContainerDetail({ container, onAction, onRemove }: { container: 
             </div>
           </div>
         )}
-        {tab === "logs" && <LogsPanel containerId={container.id} />}
-        {tab === "exec" && <ExecPanel containerId={container.id} />}
+        {tab === "logs" && <LogsPanel source={{ kind: "container", id: container.id }} />}
+        {tab === "exec" && <ExecPanel target={{ kind: "container", id: container.id }} />}
         {tab === "settings" && <ContainerSettings container={container} />}
       </div>
     </div>

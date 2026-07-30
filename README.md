@@ -185,9 +185,18 @@ the normal state. Think of it as "give me a Linux VM," offered by the same tool,
 than as infrastructure that containers sit on.
 
 The tab lists any machines you have with their CPU, memory, and state, and can create,
-stop, delete, and set the default machine. What it does *not* yet expose is
-`container machine run`, which opens a shell inside one — the main reason to want a
-machine in the first place. See [Known gaps](#known-gaps).
+stop, delete, and set the default machine. Selecting one gives it four tabs:
+
+- **Info** — CPUs and memory.
+- **Logs** — the machine's stdio log, with a **Boot log** toggle for the VM's boot output,
+  which is where you look when a machine won't come up.
+- **Shell** — a prompt inside the machine, via `container machine run`. The machine is
+  booted first if it is stopped. Unlike the container Exec tab, nothing wraps the command
+  in `sh -c` — `machine run` evaluates it in a shell on the far side already, so pipes,
+  globs, and quoting work as typed.
+- **Settings** — CPUs, memory, and how your home directory is mounted (`rw`, `ro`, `none`),
+  via `container machine set`. Only fields you change are sent. The CLI reads these at boot,
+  so the panel says plainly that the machine has to be restarted before they take effect.
 
 **Settings** — poll interval and default log line count, persisted to `.settings.json`.
 
@@ -197,9 +206,9 @@ or stop it.
 ## Development
 
 ```sh
-npm test                    # 118 frontend tests (Vitest + Testing Library)
+npm test                    # 132 frontend tests (Vitest + Testing Library)
 npm run test:watch
-cd src-tauri && cargo test  # 41 Rust tests
+cd src-tauri && cargo test  # 46 Rust tests
 npm run build               # tsc + vite, the typecheck gate
 ```
 
@@ -242,9 +251,6 @@ them. The original generated artwork is kept at [docs/app-icon-source.jpg](docs/
 Being honest about what isn't done:
 
 - **No volumes or networks UI**, though `container` has full CRUD for both.
-- **No shell into a container machine.** `container machine run` is the main thing you'd
-  want a machine for, and the Machines tab can't do it. `machine set` and `machine logs`
-  are missing too.
 
 ## License
 

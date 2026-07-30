@@ -8,12 +8,23 @@ vi.mock("../../api", () => ({
   stopMachine: vi.fn(),
   deleteMachine: vi.fn(),
   setDefaultMachine: vi.fn(),
+  setMachineConfig: vi.fn(),
 }));
 
-import { stopMachine, deleteMachine, setDefaultMachine } from "../../api";
+// The tab bodies each have their own tests; here we only care that the right
+// one is mounted with the right target.
+vi.mock("../../panels/LogsPanel", () => ({
+  LogsPanel: ({ source }: any) => <div data-testid="logs">{JSON.stringify(source)}</div>,
+}));
+vi.mock("../../panels/ExecPanel", () => ({
+  ExecPanel: ({ target }: any) => <div data-testid="shell">{JSON.stringify(target)}</div>,
+}));
+
+import { stopMachine, deleteMachine, setDefaultMachine, setMachineConfig } from "../../api";
 const mockStop = vi.mocked(stopMachine);
 const mockDelete = vi.mocked(deleteMachine);
 const mockSetDefault = vi.mocked(setDefaultMachine);
+const mockSetConfig = vi.mocked(setMachineConfig);
 
 const MACHINE: Machine = { name: "test", status: "running", isDefault: false, cpus: 4, memoryMB: 4096 };
 
@@ -25,6 +36,49 @@ describe("MachineDetail", () => {
     mockStop.mockResolvedValue(undefined);
     mockDelete.mockResolvedValue(undefined);
     mockSetDefault.mockResolvedValue(undefined);
+    mockSetConfig.mockResolvedValue(undefined);
+  });
+
+  it("opens the shell against the machine, not a container", async () => {
+    render(<MachineDetail machine={MACHINE} onAction={onAction} />);
+    await userEvent.click(screen.getByRole("tab", { name: /shell/i }));
+    expect(screen.getByTestId("shell")).toHaveTextContent('{"kind":"machine","name":"test"}');
+  });
+
+  it("opens logs against the machine", async () => {
+    render(<MachineDetail machine={MACHINE} onAction={onAction} />);
+    await userEvent.click(screen.getByRole("tab", { name: /logs/i }));
+    expect(screen.getByTestId("logs")).toHaveTextContent('{"kind":"machine","name":"test"}');
+  });
+
+  it("applies only the settings that were changed", async () => {
+    render(<MachineDetail machine={MACHINE} onAction={onAction} />);
+    await userEvent.click(screen.getByRole("tab", { name: /settings/i }));
+    const memory = screen.getByLabelText(/memory/i);
+    await userEvent.clear(memory);
+    await userEvent.type(memory, "8G");
+    await userEvent.click(screen.getByRole("button", { name: /apply/i }));
+    await waitFor(() => expect(mockSetConfig).toHaveBeenCalledWith("test", { memory: "8G" }));
+  });
+
+  it("does not call the CLI when Apply is pressed with nothing changed", async () => {
+    render(<MachineDetail machine={MACHINE} onAction={onAction} />);
+    await userEvent.click(screen.getByRole("tab", { name: /settings/i }));
+    expect(screen.getByRole("button", { name: /apply/i })).toBeDisabled();
+    expect(mockSetConfig).not.toHaveBeenCalled();
+  });
+
+  // `machine set` only takes effect on the next boot, and the CLI says so.
+  // Not repeating that in the GUI would leave people thinking it did nothing.
+  it("says a restart is needed after applying", async () => {
+    render(<MachineDetail machine={MACHINE} onAction={onAction} />);
+    await userEvent.click(screen.getByRole("tab", { name: /settings/i }));
+    const cpus = screen.getByLabelText(/cpus/i);
+    await userEvent.clear(cpus);
+    await userEvent.type(cpus, "8");
+    await userEvent.click(screen.getByRole("button", { name: /apply/i }));
+    await waitFor(() => expect(screen.getByText(/^Saved\./)).toBeInTheDocument());
+    expect(screen.getByText(/for the restart to pick it up/i)).toBeInTheDocument();
   });
 
   it("shows machine name and status", () => {
