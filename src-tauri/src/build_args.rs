@@ -249,13 +249,30 @@ mod tests {
     #[test]
     fn each_pair_emits_its_own_flag() {
         let mut o = opts("/ctx");
-        o.build_args = vec![kv("A", "1"), kv("B", "2")];
-        o.labels = vec![kv("org.name", "acd")];
+        // " B " and " 2 " must be trimmed to "B" and "2"; "  " key must be dropped.
+        o.build_args = vec![kv("A", "1"), kv(" B ", " 2 "), kv("  ", "orphan")];
+        // " x.y " key must be trimmed; "  " key must be dropped.
+        o.labels = vec![kv(" x.y ", "val"), kv("  ", "ghost")];
         let argv = build_argv(&o, Path::new("/ctx/Dockerfile"));
+        // blank-key pair is filtered out, so count is 2 not 3
         assert_eq!(argv.iter().filter(|a| *a == "--build-arg").count(), 2);
         assert!(argv.contains(&"A=1".to_string()));
-        assert!(argv.contains(&"B=2".to_string()));
-        assert!(argv.contains(&"org.name=acd".to_string()));
+        assert!(argv.contains(&"B=2".to_string()), "expected trimmed B=2");
+        // no trace of the orphan pair
+        assert!(
+            !argv.iter().any(|a| a.contains("orphan")),
+            "blank-key build-arg leaked"
+        );
+        // label loop: one clean pair after filtering
+        assert_eq!(argv.iter().filter(|a| *a == "--label").count(), 1);
+        assert!(
+            argv.contains(&"x.y=val".to_string()),
+            "expected trimmed x.y=val"
+        );
+        assert!(
+            !argv.iter().any(|a| a.contains("ghost")),
+            "blank-key label leaked"
+        );
     }
 
     #[test]
@@ -293,7 +310,7 @@ mod tests {
                 .unwrap()
                 .to_string(),
         );
-        assert!(validate(&o).is_ok());
+        assert_eq!(validate(&o).unwrap(), df_dir.path().join("Dockerfile"));
     }
 
     #[test]
