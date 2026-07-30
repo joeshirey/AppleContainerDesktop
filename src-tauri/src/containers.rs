@@ -1,6 +1,6 @@
 use crate::cli::run_cmd;
 use crate::recreate::{build_run_args, config_of, RecreatePlan};
-use serde_json::Value;
+use serde_json::{json, Value};
 
 #[tauri::command]
 pub async fn search_hub(query: String) -> Result<Value, String> {
@@ -37,36 +37,61 @@ pub async fn get_hub_tags(name: String) -> Result<Value, String> {
         .map_err(|e| e.to_string())
 }
 
-fn bind_mounts_exist(container: &Value) -> bool {
+/// Host paths this container bind-mounts that no longer exist.
+///
+/// A mount with no host path at all (a volume, a tmpfs) is not a bind mount
+/// and is never reported.
+fn missing_bind_mounts(container: &Value) -> Vec<String> {
     let mounts = container
         .get("configuration")
         .and_then(|c| c.get("mounts").or_else(|| c.get("bindMounts")))
         .and_then(|m| m.as_array());
 
-    let Some(mounts) = mounts else { return true };
+    let Some(mounts) = mounts else {
+        return Vec::new();
+    };
 
-    mounts.iter().all(|m| {
-        let source = m
-            .get("source")
-            .or_else(|| m.get("hostPath"))
-            .or_else(|| m.get("src"))
-            .and_then(|s| s.as_str());
-        source.map_or(true, |p| std::path::Path::new(p).exists())
-    })
+    mounts
+        .iter()
+        .filter_map(|m| {
+            m.get("source")
+                .or_else(|| m.get("hostPath"))
+                .or_else(|| m.get("src"))
+                .and_then(|s| s.as_str())
+        })
+        .filter(|p| !std::path::Path::new(p).exists())
+        .map(str::to_string)
+        .collect()
+}
+
+/// Tag containers whose bind-mount sources have gone away, leaving them in the
+/// list. They used to be filtered out, which made them invisible in the GUI —
+/// and so impossible to inspect or delete — even though the CLI still had them.
+fn annotate_bind_mounts(raw: Value) -> Value {
+    let Some(arr) = raw.as_array() else {
+        return raw;
+    };
+    Value::Array(
+        arr.iter()
+            .map(|c| {
+                let missing = missing_bind_mounts(c);
+                match (missing.is_empty(), c.as_object()) {
+                    (false, Some(obj)) => {
+                        let mut obj = obj.clone();
+                        obj.insert("missingBindMounts".into(), json!(missing));
+                        Value::Object(obj)
+                    }
+                    _ => c.clone(),
+                }
+            })
+            .collect(),
+    )
 }
 
 #[tauri::command]
 pub fn list_containers() -> Result<Value, String> {
     let raw = run_cmd(&["ls", "-a"]).map_err(|e| e.message)?;
-    if let Some(arr) = raw.as_array() {
-        let filtered: Vec<Value> = arr
-            .iter()
-            .filter(|c| bind_mounts_exist(c))
-            .cloned()
-            .collect();
-        return Ok(Value::Array(filtered));
-    }
-    Ok(raw)
+    Ok(annotate_bind_mounts(raw))
 }
 
 #[tauri::command]
@@ -307,4 +332,81 @@ pub fn set_default_machine(name: String) -> Result<(), String> {
     run_cmd(&["machine", "set-default", &name])
         .map(|_| ())
         .map_err(|e| e.message)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    /// A path that is guaranteed to exist, and one that cannot.
+    const REAL: &str = "/tmp";
+    const GONE: &str = "/tmp/definitely-not-here-8f3a2c1d";
+
+    fn with_mounts(mounts: Value) -> Value {
+        json!({ "id": "c1", "configuration": { "mounts": mounts } })
+    }
+
+    #[test]
+    fn no_mounts_means_nothing_missing() {
+        assert!(missing_bind_mounts(&json!({ "id": "c1" })).is_empty());
+        assert!(missing_bind_mounts(&with_mounts(json!([]))).is_empty());
+    }
+
+    #[test]
+    fn a_mount_whose_source_exists_is_not_missing() {
+        let c = with_mounts(json!([{ "source": REAL }]));
+        assert!(missing_bind_mounts(&c).is_empty());
+    }
+
+    #[test]
+    fn a_mount_whose_source_is_gone_is_reported() {
+        let c = with_mounts(json!([{ "source": GONE }]));
+        assert_eq!(missing_bind_mounts(&c), vec![GONE.to_string()]);
+    }
+
+    #[test]
+    fn reports_only_the_missing_sources_of_a_mixed_set() {
+        let c = with_mounts(json!([{ "source": REAL }, { "source": GONE }]));
+        assert_eq!(missing_bind_mounts(&c), vec![GONE.to_string()]);
+    }
+
+    #[test]
+    fn reads_the_alternate_source_spellings() {
+        for key in ["source", "hostPath", "src"] {
+            let c = with_mounts(json!([{ key: GONE }]));
+            assert_eq!(missing_bind_mounts(&c), vec![GONE.to_string()], "key {key}");
+        }
+    }
+
+    #[test]
+    fn a_mount_with_no_source_at_all_is_not_missing() {
+        // A volume or tmpfs mount has no host path to check.
+        let c = with_mounts(json!([{ "destination": "/data" }]));
+        assert!(missing_bind_mounts(&c).is_empty());
+    }
+
+    // The list used to drop these containers entirely, which left them
+    // invisible in the GUI and therefore impossible to inspect or delete.
+    #[test]
+    fn annotate_keeps_a_broken_container_and_labels_it() {
+        let raw = json!([with_mounts(json!([{ "source": GONE }]))]);
+        let out = annotate_bind_mounts(raw);
+        let arr = out.as_array().expect("array");
+        assert_eq!(arr.len(), 1, "broken container must still be listed");
+        assert_eq!(arr[0]["missingBindMounts"], json!([GONE]));
+    }
+
+    #[test]
+    fn annotate_leaves_healthy_containers_unmarked() {
+        let raw = json!([with_mounts(json!([{ "source": REAL }]))]);
+        let out = annotate_bind_mounts(raw);
+        assert!(out[0].get("missingBindMounts").is_none());
+    }
+
+    #[test]
+    fn annotate_passes_through_a_non_array_payload() {
+        let raw = json!({ "error": "nope" });
+        assert_eq!(annotate_bind_mounts(raw.clone()), raw);
+    }
 }

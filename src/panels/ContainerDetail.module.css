@@ -9,6 +9,9 @@
 .btnGreen { height: 28px; padding: 0 12px; background: var(--green); color: white; border: none; border-radius: 7px; font-size: 0.72rem; font-weight: 600; cursor: pointer; }
 .btnGhost { height: 28px; padding: 0 12px; background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 7px; font-size: 0.72rem; cursor: pointer; }
 .errBar { padding: 8px 16px; background: var(--red-tint-bg); color: var(--red); font-size: 0.78rem; border-bottom: 1px solid var(--red-tint-border); flex-shrink: 0; }
+.warnBar { padding: 8px 16px; background: var(--amber-tint-bg); color: var(--amber); font-size: 0.78rem; border-bottom: 1px solid var(--amber-tint-border); flex-shrink: 0; }
+.warnList { margin: 4px 0 0; padding-left: 18px; }
+.warnList li { font-size: 0.74rem; }
 .tabs { display: flex; background: var(--surface); border-bottom: 1px solid var(--border); flex-shrink: 0; }
 .tab { padding: 8px 14px; font-size: 0.78rem; font-weight: 500; color: var(--gray); border: none; background: none; border-bottom: 2px solid transparent; cursor: pointer; }
 .tab:hover { color: var(--fg); } .tabActive { color: var(--blue) !important; border-bottom-color: var(--blue) !important; }

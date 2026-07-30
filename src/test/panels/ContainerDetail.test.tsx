@@ -11,6 +11,22 @@ const stopped: Container = { id: "def", name: "redis", image: "redis:7", status:
 describe("ContainerDetail", () => {
   beforeEach(() => { vi.clearAllMocks(); mock.mockResolvedValue({}); });
 
+  it("warns about missing bind-mount sources and names each path", () => {
+    const broken: Container = {
+      ...stopped,
+      missingBindMounts: ["/Users/me/gone", "/tmp/also-gone"],
+    };
+    render(<ContainerDetail container={broken} onAction={() => {}} />);
+    expect(screen.getByText(/bind mount/i)).toBeInTheDocument();
+    expect(screen.getByText("/Users/me/gone")).toBeInTheDocument();
+    expect(screen.getByText("/tmp/also-gone")).toBeInTheDocument();
+  });
+
+  it("shows no bind-mount warning when every source is present", () => {
+    render(<ContainerDetail container={stopped} onAction={() => {}} />);
+    expect(screen.queryByText(/bind mount/i)).not.toBeInTheDocument();
+  });
+
   it("shows container name", () => {
     render(<ContainerDetail container={running} onAction={() => {}} />);
     expect(screen.getByText("nginx")).toBeInTheDocument();

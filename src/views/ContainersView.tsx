@@ -66,11 +66,19 @@ export function ContainersView() {
 }
 
 function Row({ c, selected, onClick }: { c: Container; selected: boolean; onClick: () => void }) {
+  const broken = (c.missingBindMounts?.length ?? 0) > 0;
   return (
     <button className={`${styles.row} ${selected ? styles.rowSelected : ""}`} onClick={onClick}>
       <StatusDot status={c.status} />
       <div className={styles.info}>
-        <div className={styles.name}>{c.name}</div>
+        <div className={styles.name}>
+          {c.name}
+          {broken && (
+            <span className={styles.warnBadge} title="A bind mount source is missing">
+              mount missing
+            </span>
+          )}
+        </div>
         <div className={styles.meta}>{c.image}{c.ports ? ` · ${c.ports}` : ""}</div>
       </div>
     </button>

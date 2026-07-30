@@ -5,6 +5,9 @@ export interface Container {
   status: string;
   ports?: string;
   created?: string;
+  /// Host paths the container bind-mounts that no longer exist. It will not
+  /// start until they are restored.
+  missingBindMounts?: string[];
 }
 
 export interface ContainerStats {

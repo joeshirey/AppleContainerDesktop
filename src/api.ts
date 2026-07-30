@@ -16,6 +16,7 @@ function normalizeContainer(raw: any): Container {
     status: raw.status?.state ?? "stopped",
     created: raw.configuration?.creationDate,
     ports: portStr,
+    missingBindMounts: raw.missingBindMounts ?? [],
   };
 }
 

@@ -154,6 +154,10 @@ Select one for four tabs:
   settings `run` has no flag for, and if the re-run fails after the remove, hands you the
   full command line to recover with.
 
+A container whose bind-mount source has been deleted off the host gets a **mount missing**
+badge in the list and a banner in its detail panel naming the paths. It won't start until
+they're restored, but it stays visible, inspectable, and removable.
+
 **+ Run** opens a dialog for image, name, ports, env vars, CPUs, and memory.
 
 **Images** — list, run, remove, prune unused, and pull by name. Names are shortened the
@@ -191,9 +195,9 @@ or stop it.
 ## Development
 
 ```sh
-npm test                    # 99 frontend tests (Vitest + Testing Library)
+npm test                    # 111 frontend tests (Vitest + Testing Library)
 npm run test:watch
-cd src-tauri && cargo test  # 32 Rust tests
+cd src-tauri && cargo test  # 41 Rust tests
 npm run build               # tsc + vite, the typecheck gate
 ```
 
@@ -239,8 +243,6 @@ Being honest about what isn't done:
 - **No shell into a container machine.** `container machine run` is the main thing you'd
   want a machine for, and the Machines tab can't do it. `machine set` and `machine logs`
   are missing too.
-- **Containers whose bind-mount sources have been deleted are hidden** from the list rather
-  than shown as broken.
 - **Hub search uses a deprecated Docker Hub endpoint** that may stop working.
 
 ## License

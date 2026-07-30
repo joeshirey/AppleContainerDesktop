@@ -14,6 +14,7 @@ export function ContainerDetail({ container, onAction, onRemove }: { container: 
   const [err, setErr] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const isRunning = container.status.toLowerCase() === "running";
+  const missingMounts = container.missingBindMounts ?? [];
 
   useEffect(() => {
     if (!isRunning || tab !== "info") return;
@@ -55,6 +56,21 @@ export function ContainerDetail({ container, onAction, onRemove }: { container: 
       </div>
 
       {err && <div className={styles.errBar}>{err}</div>}
+
+      {missingMounts.length > 0 && (
+        <div className={styles.warnBar}>
+          <strong>
+            {missingMounts.length === 1
+              ? "A bind mount source no longer exists."
+              : `${missingMounts.length} bind mount sources no longer exist.`}
+          </strong>{" "}
+          This container will not start until the path is restored. You can still
+          inspect its logs and remove it.
+          <ul className={styles.warnList}>
+            {missingMounts.map(p => <li key={p} className={styles.mono}>{p}</li>)}
+          </ul>
+        </div>
+      )}
 
       <div className={styles.tabs}>
         {(["info","logs","exec","settings"] as Tab[]).map(t => (

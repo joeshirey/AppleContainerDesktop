@@ -48,6 +48,20 @@ describe("api", () => {
     expect(result[0].name).toBe("nginx");
     expect(result[0].image).toBe("nginx:latest");
     expect(result[0].status).toBe("running");
+    expect(result[0].missingBindMounts).toEqual([]);
+  });
+
+  // The backend tags these rather than hiding them, so the UI can warn about
+  // a container instead of pretending it does not exist.
+  it("listContainers carries through missing bind-mount paths", async () => {
+    mockInvoke.mockResolvedValue([{
+      id: "broken",
+      configuration: { image: { reference: "nginx:latest" } },
+      status: { state: "stopped" },
+      missingBindMounts: ["/Users/me/gone", "/tmp/also-gone"],
+    }]);
+    const result = await listContainers();
+    expect(result[0].missingBindMounts).toEqual(["/Users/me/gone", "/tmp/also-gone"]);
   });
 
   // startContainer

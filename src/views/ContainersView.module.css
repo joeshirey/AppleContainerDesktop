@@ -11,6 +11,7 @@
 .info { flex: 1; min-width: 0; }
 .name { font-size: 0.8rem; font-weight: 500; color: var(--fg); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .meta { font-size: 0.68rem; color: var(--gray); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.warnBadge { margin-left: 6px; padding: 1px 5px; border-radius: 4px; background: var(--amber-tint-bg); color: var(--amber); border: 1px solid var(--amber-tint-border); font-size: 0.6rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.03em; vertical-align: 1px; }
 .detail { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
 .emptyDetail { display: flex; align-items: center; justify-content: center; flex: 1; color: var(--gray); font-size: 0.85rem; }
 .empty { display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 8px; padding: 32px; text-align: center; }
