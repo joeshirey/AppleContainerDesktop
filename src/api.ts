@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import type { Container, ContainerEdits, ContainerStats, Image, Machine, RecreatePlan } from "./types";
+import type { Container, ContainerEdits, ContainerStats, HubResult, Image, Machine, RecreatePlan } from "./types";
 
 // The Apple container CLI returns deeply nested JSON. These helpers normalize
 // the raw CLI output into our flat types.
@@ -123,7 +123,34 @@ export const setDefaultMachine = (name: string): Promise<void> => invoke("set_de
 export const checkSystemStatus = (): Promise<{ status: string }> => invoke("check_system_status");
 export const startSystem = (): Promise<void> => invoke("start_system");
 export const stopSystem = (): Promise<void> => invoke("stop_system");
-export const searchHub = (query: string): Promise<{ results: any[] }> =>
-  invoke("search_hub", { query });
+/// Search API v4 returns more than images: `dhi` is a Docker Hardened Image,
+/// which needs a subscription, and `extension` is a Docker Desktop extension.
+/// Neither can be pulled with `container`, so neither belongs in the results.
+const PULLABLE_HUB_TYPE = "image";
+
+function normalizeHubResult(raw: any): HubResult {
+  const name: string = raw.id ?? "";
+  return {
+    name,
+    displayName: raw.slug ?? name,
+    description: raw.short_description ?? "",
+    // v4 replaced the v2 `is_official` boolean with a `badge` string.
+    isOfficial: raw.badge === "official",
+    pullCount: raw.raw_pull_count ?? 0,
+    starCount: raw.star_count ?? 0,
+  };
+}
+
+export async function searchHub(query: string): Promise<HubResult[]> {
+  const data = await invoke<{ results?: any[] }>("search_hub", { query });
+  return (data.results ?? [])
+    .filter(r => r?.type === PULLABLE_HUB_TYPE && !r.archived)
+    .map(normalizeHubResult)
+    .sort((a, b) => {
+      if (a.isOfficial !== b.isOfficial) return a.isOfficial ? -1 : 1;
+      if (b.pullCount !== a.pullCount) return b.pullCount - a.pullCount;
+      return b.starCount - a.starCount;
+    });
+}
 export const getHubTags = (name: string): Promise<{ results: { name: string }[] }> =>
   invoke("get_hub_tags", { name });

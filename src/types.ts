@@ -51,6 +51,18 @@ export interface RecreatePlan {
   unsupported: string[];
 }
 
+/// One pullable repository from a Docker Hub search.
+export interface HubResult {
+  /// The path to pull, e.g. "library/nginx" or "grafana/grafana".
+  name: string;
+  /// What to show the user: "nginx" rather than "library/nginx".
+  displayName: string;
+  description: string;
+  isOfficial: boolean;
+  pullCount: number;
+  starCount: number;
+}
+
 export type NavSection = "containers" | "images" | "hub" | "machines" | "settings";
 
 export interface Settings {

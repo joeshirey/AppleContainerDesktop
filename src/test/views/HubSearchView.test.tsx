@@ -14,12 +14,11 @@ const mockPull = vi.mocked(pullImage);
 const mockSearch = vi.mocked(searchHub);
 const mockTags = vi.mocked(getHubTags);
 
-const SEARCH_RESPONSE = {
-  results: [
-    { repo_name: "library/nginx", short_description: "Official Nginx image", star_count: 20000, pull_count: 1200000000, is_official: true },
-    { repo_name: "myuser/myapp", short_description: "A custom app", star_count: 42, pull_count: 1000, is_official: false },
-  ],
-};
+// searchHub normalizes and sorts; the view receives a plain HubResult[].
+const SEARCH_RESPONSE = [
+  { name: "library/nginx", displayName: "nginx", description: "Official Nginx image", isOfficial: true, pullCount: 1200000000, starCount: 20000 },
+  { name: "myuser/myapp", displayName: "myuser/myapp", description: "A custom app", isOfficial: false, pullCount: 1000, starCount: 42 },
+];
 
 const TAGS_RESPONSE = { results: [{ name: "latest" }, { name: "1.27" }, { name: "alpine" }] };
 
@@ -47,7 +46,7 @@ describe("HubSearchView", () => {
   });
 
   it("shows empty state when no results", async () => {
-    mockSearch.mockResolvedValueOnce({ results: [] });
+    mockSearch.mockResolvedValueOnce([]);
     render(<HubSearchView />);
     await userEvent.type(screen.getByPlaceholderText(/search docker hub/i), "xyzzy");
     await userEvent.click(screen.getByRole("button", { name: /search/i }));

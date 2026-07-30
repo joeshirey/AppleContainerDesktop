@@ -2,12 +2,17 @@ use crate::cli::run_cmd;
 use crate::recreate::{build_run_args, config_of, RecreatePlan};
 use serde_json::{json, Value};
 
+/// Docker Hub's search API. The older `/v2/search/repositories/` is deprecated;
+/// v4 is what the Hub website itself calls. It returns Hardened Images and
+/// Desktop extensions alongside ordinary images — the frontend filters those out.
+const HUB_SEARCH_URL: &str = "https://hub.docker.com/api/search/v4";
+
 #[tauri::command]
 pub async fn search_hub(query: String) -> Result<Value, String> {
     let client = reqwest::Client::new();
     client
-        .get("https://hub.docker.com/v2/search/repositories/")
-        .query(&[("query", query.as_str()), ("page_size", "20")])
+        .get(HUB_SEARCH_URL)
+        .query(&[("query", query.as_str()), ("size", "20")])
         .header("Accept", "application/json")
         .send()
         .await

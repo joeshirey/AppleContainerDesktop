@@ -167,7 +167,9 @@ are the compressed download size of the arm64 variant, the only real figure the 
 metadata records — the unpacked footprint on disk is larger.
 
 **Docker Hub** — search Hub without leaving the app; official images are badged and sorted
-first, then by pull count. Pick a tag and pull it.
+first, then by pull count. Pick a tag and pull it. Results that can't actually be pulled
+here — Hardened Images, which need a subscription, and Docker Desktop extensions — are
+filtered out, as are archived repositories.
 
 **Machines** — *container machines*, which are a separate feature from containers and are
 worth explaining, because the name suggests something they are not.
@@ -195,7 +197,7 @@ or stop it.
 ## Development
 
 ```sh
-npm test                    # 111 frontend tests (Vitest + Testing Library)
+npm test                    # 118 frontend tests (Vitest + Testing Library)
 npm run test:watch
 cd src-tauri && cargo test  # 41 Rust tests
 npm run build               # tsc + vite, the typecheck gate
@@ -243,7 +245,6 @@ Being honest about what isn't done:
 - **No shell into a container machine.** `container machine run` is the main thing you'd
   want a machine for, and the Machines tab can't do it. `machine set` and `machine logs`
   are missing too.
-- **Hub search uses a deprecated Docker Hub endpoint** that may stop working.
 
 ## License
 

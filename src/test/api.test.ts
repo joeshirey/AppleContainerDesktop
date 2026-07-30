@@ -22,7 +22,22 @@ import {
   stopMachine,
   deleteMachine,
   setDefaultMachine,
+  searchHub,
 } from "../api";
+
+/// Trimmed to the fields we read, but the names and value shapes are copied
+/// from a live `GET /api/search/v4?query=nginx` response.
+const V4_NGINX = {
+  id: "library/nginx",
+  slug: "nginx",
+  type: "image",
+  badge: "official",
+  short_description: "Official build of Nginx.",
+  star_count: 21347,
+  raw_pull_count: 13198322582,
+  pull_count: "1B+",
+  archived: false,
+};
 
 const mockInvoke = vi.mocked(invoke);
 
@@ -272,6 +287,80 @@ describe("api", () => {
     expect(mockInvoke).toHaveBeenCalledWith("remove_image", {
       reference: "docker.io/library/debian:latest",
     });
+  });
+
+  // searchHub — Docker Hub search API v4
+  it("searchHub maps a v4 result onto the fields the view renders", async () => {
+    mockInvoke.mockResolvedValue({ results: [V4_NGINX] });
+    const [r] = await searchHub("nginx");
+    expect(mockInvoke).toHaveBeenCalledWith("search_hub", { query: "nginx" });
+    expect(r).toEqual({
+      name: "library/nginx",
+      displayName: "nginx",
+      description: "Official build of Nginx.",
+      isOfficial: true,
+      pullCount: 13198322582,
+      starCount: 21347,
+    });
+  });
+
+  it("searchHub reads official from the v4 badge, not is_official", async () => {
+    mockInvoke.mockResolvedValue({
+      results: [{ ...V4_NGINX, badge: "verified_publisher", id: "grafana/grafana", slug: "grafana/grafana" }],
+    });
+    const [r] = await searchHub("grafana");
+    expect(r.isOfficial).toBe(false);
+    expect(r.displayName).toBe("grafana/grafana");
+  });
+
+  it("searchHub drops hardened and extension results, which cannot be pulled", async () => {
+    mockInvoke.mockResolvedValue({
+      results: [
+        { ...V4_NGINX, id: "dhi/nginx", slug: "dhi/nginx", type: "dhi", badge: "hardened" },
+        { ...V4_NGINX, id: "extension/nginx/x", slug: "nginx/x", type: "extension" },
+        V4_NGINX,
+      ],
+    });
+    const results = await searchHub("nginx");
+    expect(results.map(r => r.name)).toEqual(["library/nginx"]);
+  });
+
+  it("searchHub drops archived repositories", async () => {
+    mockInvoke.mockResolvedValue({
+      results: [{ ...V4_NGINX, id: "old/thing", slug: "old/thing", archived: true }, V4_NGINX],
+    });
+    const results = await searchHub("nginx");
+    expect(results.map(r => r.name)).toEqual(["library/nginx"]);
+  });
+
+  it("searchHub sorts official first, then by pull count", async () => {
+    mockInvoke.mockResolvedValue({
+      results: [
+        { ...V4_NGINX, id: "a/small", slug: "a/small", badge: "none", raw_pull_count: 10 },
+        { ...V4_NGINX, id: "a/big", slug: "a/big", badge: "none", raw_pull_count: 999 },
+        V4_NGINX,
+      ],
+    });
+    const results = await searchHub("nginx");
+    expect(results.map(r => r.displayName)).toEqual(["nginx", "a/big", "a/small"]);
+  });
+
+  it("searchHub survives a result missing every optional field", async () => {
+    mockInvoke.mockResolvedValue({ results: [{ id: "bare/repo", type: "image" }] });
+    const [r] = await searchHub("bare");
+    expect(r).toEqual({
+      name: "bare/repo",
+      displayName: "bare/repo",
+      description: "",
+      isOfficial: false,
+      pullCount: 0,
+      starCount: 0,
+    });
+  });
+
+  it("searchHub returns an empty list when the API sends no results array", async () => {
+    mockInvoke.mockResolvedValue({ total: 0 });
+    expect(await searchHub("xyzzy")).toEqual([]);
   });
 
   // pullImage

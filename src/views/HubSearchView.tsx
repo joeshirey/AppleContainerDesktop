@@ -1,16 +1,11 @@
 import { useState } from "react";
 import { pullImage, searchHub, getHubTags } from "../api";
+import type { HubResult } from "../types";
 import styles from "./HubSearchView.module.css";
 
-interface HubResult {
-  name: string;       // full repo_name e.g. "library/postgres" or "myuser/app"
-  displayName: string; // user-facing e.g. "postgres" or "myuser/app"
-  description: string;
-  isOfficial: boolean;
-  pullCount: number;
-  starCount: number;
-  tags: string[];
-}
+/// Tags come from a second request per result, so they are added on top of what
+/// the search itself returns.
+type HubRow = HubResult & { tags: string[] };
 
 function formatCount(n: number): string {
   if (n >= 1_000_000_000) return `${(n / 1_000_000_000).toFixed(1)}B`;
@@ -21,7 +16,7 @@ function formatCount(n: number): string {
 
 export function HubSearchView() {
   const [query, setQuery] = useState("");
-  const [results, setResults] = useState<HubResult[] | null>(null);
+  const [results, setResults] = useState<HubRow[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [searchError, setSearchError] = useState<string | null>(null);
   const [pulling, setPulling] = useState<string | null>(null);
@@ -45,30 +40,10 @@ export function HubSearchView() {
     setPullError(null);
     setPullSuccess(null);
     try {
-      const data = await searchHub(query.trim());
-      const raw: any[] = data.results ?? [];
-      const withTags = await Promise.all(
-        raw.map(async (r) => {
-          // Docker Hub v2 search uses repo_name / short_description
-          const name: string = r.repo_name ?? r.name ?? "";
-          const displayName = name.startsWith("library/") ? name.slice("library/".length) : name;
-          return {
-            name,
-            displayName,
-            description: (r.short_description ?? r.description ?? "") as string,
-            isOfficial: !!(r.is_official),
-            pullCount: r.pull_count ?? 0,
-            starCount: r.star_count ?? 0,
-            tags: await fetchTags(name),
-          };
-        })
+      const found = await searchHub(query.trim());
+      setResults(
+        await Promise.all(found.map(async r => ({ ...r, tags: await fetchTags(r.name) })))
       );
-      withTags.sort((a, b) => {
-        if (a.isOfficial !== b.isOfficial) return a.isOfficial ? -1 : 1;
-        if (b.pullCount !== a.pullCount) return b.pullCount - a.pullCount;
-        return b.starCount - a.starCount;
-      });
-      setResults(withTags);
     } catch (e: any) {
       setSearchError(String(e?.message ?? e));
     } finally {
@@ -76,7 +51,7 @@ export function HubSearchView() {
     }
   }
 
-  async function handlePull(result: HubResult) {
+  async function handlePull(result: HubRow) {
     const tag = result.tags[0] ?? "latest";
     const image = `${result.displayName}:${tag}`;
     setPulling(result.name);
