@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    name: Test and build
+    # Pinned rather than macos-latest: the -latest alias migrates to a new OS
+    # over a month or two, and this is the platform the app actually requires —
+    # macOS 26 on Apple silicon.
+    runs-on: macos-26
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      # Formatting needs neither a compile nor dist/, so it can fail in seconds
+      # instead of after a full Rust build.
+      - name: cargo fmt
+        run: cargo fmt --check
+        working-directory: src-tauri
+
+      # `npm ci` fails outright on package-lock drift, which makes this the
+      # lockfile gate as well as the install step.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Frontend tests
+        run: npm test
+
+      # Has to precede every cargo step. tauri-codegen embeds `frontendDist` at
+      # compile time and dist/ is not checked in, so without this the Rust build
+      # fails with "the frontendDist configuration is set to ../dist but this
+      # path doesn't exist".
+      - name: Typecheck and build frontend
+        run: npm run build
+
+      - name: cargo clippy
+        run: cargo clippy --all-targets --locked -- -D warnings
+        working-directory: src-tauri
+
+      # The `container` CLI is deliberately absent on the runner. No test needs
+      # it: the one test that shells out asserts on the error path, which a
+      # missing binary satisfies.
+      - name: cargo test
+        run: cargo test --locked
+        working-directory: src-tauri
+
+      - name: cargo build
+        run: cargo build --locked
+        working-directory: src-tauri
