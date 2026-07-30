@@ -1,4 +1,4 @@
-# Apple Container Desktop
+# Apple Containers Desktop
 
 A native macOS desktop GUI for [Apple's `container`](https://github.com/apple/container) CLI.
 
@@ -8,8 +8,15 @@ panel behind each one. It shells out to the `container` binary you already have 
 and parses its JSON output — there is no daemon, no socket, and no second source of truth.
 Anything you do here you could have done at the prompt.
 
+> **Early version — build it and run it yourself.**
+> This is developer-oriented software at version 0.1. There are no prebuilt downloads and
+> no release binaries; the [supported path](#build-and-run-it-locally) is cloning the repo
+> and building it. Expect rough edges — the [Known gaps](#known-gaps) section is an honest
+> list of them. It is useful day to day, but it has not been hardened, packaged, or tested
+> anywhere beyond the machines of the people working on it.
+
 <!-- Add a screenshot here once you have one — a GUI project's README really wants one:
-![Apple Container Desktop](docs/screenshot.png)
+![Apple Containers Desktop](docs/screenshot.png)
 -->
 
 ## Requirements
@@ -33,55 +40,100 @@ then falls back to a plain `PATH` lookup. It probes those two paths explicitly b
 app launched from Finder or the Dock inherits a minimal `PATH` that usually does not include
 Homebrew.
 
-## Building and running
+## Build and run it locally
+
+This is the intended way to use the app.
+
+**One-time setup.** Install [Node.js](https://nodejs.org) 18 or newer and a Rust toolchain:
+
+```sh
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+```
+
+Xcode Command Line Tools are also needed for linking; `xcode-select --install` if you
+have not already. Then:
 
 ```sh
 git clone https://github.com/joeshirey/AppleContainerDesktop.git
 cd AppleContainerDesktop
 npm install
-
-npm run tauri dev     # hot-reloading dev build
-npm run tauri build   # release .app + .dmg
 ```
 
-`tauri build` writes to `src-tauri/target/release/bundle/` — a `.app` under `macos/` and a
-roughly 4 MB `.dmg` under `dmg/`.
+**Run it.** Two ways, depending on what you're doing:
 
-## Distributing it
-
-**Yes, you can ship a binary — but not the one `tauri build` gives you by default.**
-
-The bundle it produces is *ad-hoc signed*: it has a signature, but no Apple team identity
-behind it. It runs fine on the machine that built it and fails Gatekeeper anywhere else:
-
-```
-$ spctl -a -t install applecontainerdesktop.app
-applecontainerdesktop.app: code has no resources but signature indicates they must be present
+```sh
+npm run tauri dev
 ```
 
-A user who downloads that `.dmg` gets told the app is damaged or from an unidentified
-developer. They can get past it — right-click → Open, or `xattr -dr com.apple.quarantine
-/Applications/applecontainerdesktop.app` — but asking strangers to strip quarantine
-attributes off a binary is a bad habit to teach, and most people will just delete it.
+Development mode. Opens the app with hot reload — edit anything under `src/` and the
+window updates without restarting. Right-click → Inspect Element gives you a devtools
+console. The first launch compiles the Rust side and takes a couple of minutes; later
+ones are seconds. This is what you want if you're changing the code.
 
-To distribute properly you need:
+```sh
+npm run tauri build
+```
 
-1. **An Apple Developer Program membership** — $99/year. The free tier can sign for local
+Release mode. Compiles an optimized build and packages it, taking a minute or so from
+cold. It writes two things to `src-tauri/target/release/bundle/`:
+
+| Path | What it is |
+|---|---|
+| `macos/Apple Containers Desktop.app` | The application. Double-click it, or drag it to `/Applications`. |
+| `dmg/Apple Containers Desktop_0.1.0_aarch64.dmg` | A ~4 MB disk image wrapping that same `.app`. |
+
+To use it like a normal app:
+
+```sh
+cp -r "src-tauri/target/release/bundle/macos/Apple Containers Desktop.app" /Applications/
+open "/Applications/Apple Containers Desktop.app"
+```
+
+That works on the machine that built it, which is the supported case. Moving that `.app`
+to *another* Mac is where it gets complicated — see below.
+
+**If the app opens but shows no containers,** the `container` binary was not found. The app
+looks in `/opt/homebrew/bin`, then `/usr/local/bin`, then `PATH`. Check with
+`which container`; if it lives somewhere else, symlink it into one of those two.
+
+## A note on distributing it
+
+**Short version: don't bother. Build locally.** This section exists to explain why, and
+what it would take if you ever wanted to change that.
+
+`tauri build` does emit a real `.dmg`, so it looks like something you could hand to a
+colleague. You can't, quite. The bundle is *ad-hoc signed* — it carries a signature but no
+Apple team identity — so Gatekeeper rejects it anywhere but the machine that produced it:
+
+```
+$ spctl -a -t install "Apple Containers Desktop.app"
+Apple Containers Desktop.app: code has no resources but signature indicates they must be present
+```
+
+Someone who downloads that file is told the app is damaged or comes from an unidentified
+developer. There are workarounds — right-click → Open, or
+`xattr -dr com.apple.quarantine "/Applications/Apple Containers Desktop.app"` — but talking
+strangers through stripping quarantine flags off a binary is a bad habit to teach, and most
+will just delete it.
+
+Making it genuinely distributable needs three things:
+
+1. **An Apple Developer Program membership**, $99/year. The free tier signs for local
    development but cannot notarize, so downloads still show as unverified.
-2. **A Developer ID Application certificate.** Only the account holder can create one. Set
-   it as `APPLE_SIGNING_IDENTITY`, or in `tauri.conf.json` under
-   `bundle.macOS.signingIdentity`.
-3. **Notarization**, which uploads the signed bundle to Apple for an automated malware scan
-   and staples the result. Configure with either the App Store Connect API
+2. **A Developer ID Application certificate** — only the account holder can create one. Set
+   it via `APPLE_SIGNING_IDENTITY` or `bundle.macOS.signingIdentity` in `tauri.conf.json`.
+3. **Notarization**, which submits the signed bundle to Apple for an automated malware scan
+   and staples the result to it. Driven by either the App Store Connect API
    (`APPLE_API_ISSUER`, `APPLE_API_KEY`, `APPLE_API_KEY_PATH`) or an Apple ID (`APPLE_ID`,
    `APPLE_PASSWORD` as an app-specific password, `APPLE_TEAM_ID`).
 
-With those set, `npm run tauri build` signs and notarizes as part of the build.
-[`tauri-action`](https://github.com/tauri-apps/tauri-action) does the same in GitHub Actions
-and attaches the result to a release, so tagging a version publishes an installable `.dmg`.
+With those in the environment, `npm run tauri build` signs and notarizes as part of the
+build, and [`tauri-action`](https://github.com/tauri-apps/tauri-action) does it in GitHub
+Actions so that tagging a version publishes an installable `.dmg`. Tauri's
+[macOS signing guide](https://v2.tauri.app/distribute/sign/macos/) walks the full path.
 
-Tauri's [macOS signing guide](https://v2.tauri.app/distribute/sign/macos/) covers the whole
-path. Until someone walks it, building from source is the honest answer.
+None of that is set up here, and given that everyone who can run this already needs the
+`container` CLI installed from a GitHub release, building from source is a reasonable ask.
 
 ## What's in it
 
@@ -109,8 +161,23 @@ Select one for four tabs:
 **Docker Hub** — search Hub without leaving the app; official images are badged and sorted
 first, then by pull count. Pick a tag and pull it.
 
-**Machines** — the VMs `container` runs on. List, create, stop, delete, and set the default,
-with CPU and memory shown per machine.
+**Machines** — *container machines*, which are a separate feature from containers and are
+worth explaining, because the name suggests something they are not.
+
+A container machine is a long-lived Linux VM built from a container image. You create one
+from something like `alpine:3.22`, it boots, your home directory is mounted into it (`rw`
+by default), and you can open a shell and treat it as a persistent Linux box on your Mac.
+Containers are the opposite: disposable, isolated, running one image's command.
+
+They are **not** required to run containers. `container run` does not consult them, and if
+you have never created one this tab will be empty while everything else works — which is
+the normal state. Think of it as "give me a Linux VM," offered by the same tool, rather
+than as infrastructure that containers sit on.
+
+The tab lists any machines you have with their CPU, memory, and state, and can create,
+stop, delete, and set the default machine. What it does *not* yet expose is
+`container machine run`, which opens a shell inside one — the main reason to want a
+machine in the first place. See [Known gaps](#known-gaps).
 
 **Settings** — poll interval and default log line count, persisted to `.settings.json`.
 
@@ -120,7 +187,7 @@ or stop it.
 ## Development
 
 ```sh
-npm test                    # 98 frontend tests (Vitest + Testing Library)
+npm test                    # 99 frontend tests (Vitest + Testing Library)
 npm run test:watch
 cd src-tauri && cargo test  # 32 Rust tests
 npm run build               # tsc + vite, the typecheck gate
@@ -154,6 +221,10 @@ Being honest about what isn't done:
 - **Image sizes are wrong.** The list reads `descriptor.size`, which is the size of the OCI
   index — a few kilobytes — not of the image. Debian shows as "9 KB".
 - **No volumes or networks UI**, though `container` has full CRUD for both.
+- **No shell into a container machine.** `container machine run` is the main thing you'd
+  want a machine for, and the Machines tab can't do it. `machine set` and `machine logs`
+  are missing too.
+- **The app icon is still the Tauri logo**, inherited from the project scaffold.
 - **Image names show the full registry path**, so a Docker Hub image reads as
   `docker.io/library/debian` rather than `debian`.
 - **Containers whose bind-mount sources have been deleted are hidden** from the list rather

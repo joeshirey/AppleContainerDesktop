@@ -13,14 +13,14 @@ export function SystemBanner({
     return (
       <div className={styles.bannerRunning}>
         <span>Container system is running.</span>
-        <button className={styles.btnStop} onClick={onStop}>Stop System</button>
+        <button className={styles.btnStop} onClick={onStop}>Stop Containers</button>
       </div>
     );
   }
   return (
     <div className={styles.banner}>
       <span>Container system is not running.</span>
-      <button className={styles.btn} onClick={onStart}>Start System</button>
+      <button className={styles.btn} onClick={onStart}>Start Containers</button>
     </div>
   );
 }

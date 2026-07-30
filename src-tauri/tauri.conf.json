@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "applecontainerdesktop",
+  "productName": "Apple Containers Desktop",
   "version": "0.1.0",
   "identifier": "com.joeshirey.applecontainerdesktop",
   "build": {
@@ -12,9 +12,11 @@
   "app": {
     "windows": [
       {
-        "title": "applecontainerdesktop",
-        "width": 800,
-        "height": 600
+        "title": "Apple Containers Desktop",
+        "width": 1100,
+        "height": 750,
+        "minWidth": 900,
+        "minHeight": 600
       }
     ],
     "security": {
