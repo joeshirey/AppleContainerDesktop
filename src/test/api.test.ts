@@ -656,6 +656,7 @@ describe("api", () => {
     };
     vi.mocked(invoke).mockResolvedValue(snapshot);
     await expect(getBuildState()).resolves.toEqual(snapshot);
+    expect(invoke).toHaveBeenCalledWith("get_build_state");
   });
 
   it("cancelBuild takes no arguments", async () => {
@@ -680,5 +681,14 @@ describe("api", () => {
     };
     vi.mocked(invoke).mockResolvedValue(stopped);
     await expect(builderStatus()).resolves.toEqual(stopped);
+    expect(invoke).toHaveBeenCalledWith("builder_status");
+  });
+
+  it("builderStop and builderDelete take no arguments", async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    await builderStop();
+    expect(invoke).toHaveBeenCalledWith("builder_stop");
+    await builderDelete();
+    expect(invoke).toHaveBeenCalledWith("builder_delete");
   });
 });
