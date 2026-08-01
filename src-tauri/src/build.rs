@@ -185,8 +185,15 @@ pub fn start_build(app: AppHandle, opts: BuildOptions) -> Result<(), String> {
     let err_reader = spawn_reader(app.clone(), "stderr", stderr);
     let waiter = app.clone();
     std::thread::spawn(move || {
-        // Both pipes close when the process exits, whether it finished or was
-        // killed, so joining the readers is how this thread learns it is over.
+        // Joining the readers is how this thread learns the build is over: EOF
+        // arrives when the last copy of the pipe write end closes, which is the
+        // child exiting only for as long as the CLI keeps those descriptors to
+        // itself. Measured against container 1.2.0 on 2026-07-30 — the CLI
+        // spawns no local helpers (it drives the build over XPC), holds fds 1
+        // and 2 alone, and both readers saw EOF in the same instant it exited,
+        // on a clean build and on a SIGKILL alike. A future version that forks
+        // a helper inheriting those fds would strand this thread in `join`,
+        // leaving the build stuck at Running and refusing every later start.
         let _ = out_reader.join();
         let _ = err_reader.join();
         finish(&waiter);
@@ -286,8 +293,32 @@ fn spawn_reader<R: Read + Send + 'static>(
     })
 }
 
+/// Reap the finished child and announce how the build ended.
+///
+/// Called from the waiter thread once both readers have reported EOF.
 fn finish(app: &AppHandle) {
     let manager = app.state::<BuildManager>();
+    let child = {
+        let Ok(mut guard) = manager.0.lock() else {
+            return;
+        };
+        let Some(active) = guard.as_mut() else {
+            return;
+        };
+        active.child.take()
+    };
+
+    // Waiting happens with the lock released. Sync commands run on the main
+    // thread, so `get_build_state` and `cancel_build` queue behind this mutex:
+    // a child that closes its output before a long last phase would freeze the
+    // window for the whole of it, with Cancel unavailable exactly when the user
+    // reaches for it.
+    let code = child
+        .and_then(|mut c| c.wait().ok())
+        .and_then(|status| status.code());
+
+    // The build is still Running here, and `start_build` refuses while a build
+    // is running, so nothing can have replaced the state in the gap above.
     let done = {
         let Ok(mut guard) = manager.0.lock() else {
             return;
@@ -295,12 +326,6 @@ fn finish(app: &AppHandle) {
         let Some(active) = guard.as_mut() else {
             return;
         };
-        // The pipes are already closed, so this returns without blocking.
-        let code = active
-            .child
-            .take()
-            .and_then(|mut c| c.wait().ok())
-            .and_then(|status| status.code());
         active.exit_code = code;
         active.status = final_status(active.cancel_requested, code);
         BuildDone {
@@ -322,11 +347,15 @@ pub fn cancel_build(app: AppHandle) -> Result<(), String> {
     if active.status != BuildStatus::Running {
         return Err("No build is running.".to_string());
     }
-    if let Some(child) = active.child.as_mut() {
-        child
-            .kill()
-            .map_err(|e| format!("Could not stop the build: {e}"))?;
-    }
+    let Some(child) = active.child.as_mut() else {
+        // Still Running but the child is gone means `finish` has it and is
+        // reaping: the process has already exited and its status is decided,
+        // so there is nothing left to signal.
+        return Err("The build has already finished.".to_string());
+    };
+    child
+        .kill()
+        .map_err(|e| format!("Could not stop the build: {e}"))?;
     // Recorded only once the signal is away. Setting it first and then failing
     // the kill reports the build as cancelled to the user who was just told it
     // could not be stopped, while it runs on to completion.
