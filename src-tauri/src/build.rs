@@ -15,11 +15,15 @@ use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
 /// How many lines the ring buffer retains before it starts evicting the oldest.
-/// This bounds the number of lines held, not their total byte size — a single
-/// line can be arbitrarily long, so memory is bounded by the reader in Task 4,
-/// not here.
+/// This bounds the count, not the bytes; each line is capped separately by
+/// `MAX_LINE_BYTES`. Together they put the worst case at 5000 × 64 KiB, about
+/// 320 MiB, all of which `get_build_state` clones under the lock before
+/// serializing it. Real build output comes nowhere near that, which is the only
+/// reason there is no byte budget here.
 pub const MAX_LINES: usize = 5000;
 
+/// One recorded line of output. `seq` is unique within a build and shared
+/// across both streams, and is what the frontend dedupes replayed lines by.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildLine {
@@ -28,6 +32,8 @@ pub struct BuildLine {
     pub line: String,
 }
 
+/// Where a build has got to. `Idle` is the state before the app has run one;
+/// everything else describes the most recent build.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum BuildStatus {
@@ -100,9 +106,14 @@ impl OutputBuffer {
     }
 }
 
+/// Emitted once per line of build output, carrying a [`BuildOutput`].
 pub const BUILD_OUTPUT_EVENT: &str = "build-output";
+/// Emitted once when a build ends, however it ended, carrying a [`BuildDone`].
+/// No further output event follows it for that build.
 pub const BUILD_DONE_EVENT: &str = "build-done";
 
+/// The build the app is running, or the last one it ran. One at a time: a
+/// second build is refused while this one is `Running`.
 pub struct ActiveBuild {
     build_id: u64,
     tag: String,
@@ -114,6 +125,8 @@ pub struct ActiveBuild {
     child: Option<Child>,
 }
 
+/// The managed state behind the three build commands, and the only thing the
+/// reader and waiter threads share with them.
 #[derive(Default)]
 pub struct BuildManager {
     /// The running build, or the last one to finish.
@@ -130,6 +143,8 @@ impl BuildManager {
     }
 }
 
+/// Everything the build pane needs to render itself from cold: the status, the
+/// transcript so far, and the dedupe boundary for events arriving alongside it.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildStateDto {
@@ -156,6 +171,8 @@ pub struct BuildOutput {
     pub line: BuildLine,
 }
 
+/// How a build ended. `exit_code` is `None` when the process was signalled,
+/// which is what a cancel does, so it is absent on most cancelled builds.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildDone {
@@ -165,6 +182,11 @@ pub struct BuildDone {
     pub exit_code: Option<i32>,
 }
 
+/// Start a build and return as soon as it is running; the output arrives as
+/// [`BUILD_OUTPUT_EVENT`] events and the outcome as [`BUILD_DONE_EVENT`].
+///
+/// Fails if the options do not resolve to a Dockerfile, if the CLI cannot be
+/// started, or if a build is already running.
 #[tauri::command]
 pub fn start_build(app: AppHandle, opts: BuildOptions) -> Result<(), String> {
     // Path checks touch the filesystem and say nothing about the running
@@ -278,9 +300,12 @@ const MAX_LINE_BYTES: u64 = 64 * 1024;
 /// as though that were all the build printed.
 const TRUNCATION_MARKER: &str = " [line truncated]";
 
-/// Read one line, keeping at most `MAX_LINE_BYTES` of it. `None` means this
-/// pipe has nothing more to give: end of stream, or a read error on a pipe the
-/// child is no longer writing to.
+/// Read one line, keeping at most `MAX_LINE_BYTES` of it.
+///
+/// `None` ends the stream. That is end of input in the ordinary case, but a
+/// read error also reports it, and a pipe the child is still writing to would
+/// then stop being drained. Dropping this end is what stops the child in that
+/// case, rather than the child having stopped first.
 ///
 /// `MAX_LINES` bounds how many lines are kept, not how big one can be, and
 /// `--progress plain` passes `RUN` output through verbatim. Without the cap a
@@ -355,6 +380,8 @@ fn skip_rest_of_line<R: BufRead>(reader: &mut R) -> bool {
     }
 }
 
+/// Drain one of the child's pipes onto the event bus, a line at a time, until
+/// it closes.
 fn spawn_reader<R: Read + Send + 'static>(
     app: AppHandle,
     stream: &'static str,
@@ -435,6 +462,9 @@ fn finish(app: &AppHandle) {
     let _ = app.emit(BUILD_DONE_EVENT, &done);
 }
 
+/// Kill the running build. Returns once the signal is away, not once the
+/// process is gone: the terminal status still arrives as [`BUILD_DONE_EVENT`],
+/// and it will be `Succeeded` if the build beat the signal.
 #[tauri::command]
 pub fn cancel_build(app: AppHandle) -> Result<(), String> {
     let manager = app.state::<BuildManager>();
@@ -464,6 +494,9 @@ pub fn cancel_build(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// The whole build state in one call, for a pane that has just opened or has
+/// been away. Everything in it is read under one lock, so the transcript and
+/// the `next_seq` that dedupes it against live events always agree.
 #[tauri::command]
 pub fn get_build_state(app: AppHandle) -> Result<BuildStateDto, String> {
     let manager = app.state::<BuildManager>();
