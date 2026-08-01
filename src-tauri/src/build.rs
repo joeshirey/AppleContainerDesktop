@@ -134,32 +134,37 @@ pub struct BuildDone {
 
 #[tauri::command]
 pub fn start_build(app: AppHandle, opts: BuildOptions) -> Result<(), String> {
+    // Path checks touch the filesystem and say nothing about the running
+    // build, so they happen before anything is locked.
     let dockerfile = build_args::validate(&opts)?;
+    let argv = build_args::build_argv(&opts, &dockerfile);
 
     let manager = app.state::<BuildManager>();
-    {
-        let guard = manager.0.lock().map_err(|_| "Build state is poisoned.")?;
+    // Checking, spawning and installing are one critical section. Release the
+    // lock in between and two clicks can both find nothing running and both
+    // spawn: the second install drops the first child's handle, so that build
+    // can no longer be cancelled, its readers feed their output into the second
+    // build's transcript, and its waiter ends the second build early with a
+    // status belonging to the first. Holding the lock across the spawn costs
+    // nothing, since `spawn_cmd` returns as soon as the child is running.
+    let (stdout, stderr) = {
+        let mut guard = manager.0.lock().map_err(|_| "Build state is poisoned.")?;
         if guard
             .as_ref()
             .is_some_and(|b| b.status == BuildStatus::Running)
         {
             return Err("A build is already running.".to_string());
         }
-    }
-
-    let argv = build_args::build_argv(&opts, &dockerfile);
-    let mut child = cli::spawn_cmd(&argv).map_err(|e| e.message)?;
-    let stdout = child
-        .stdout
-        .take()
-        .ok_or("Could not capture build output.")?;
-    let stderr = child
-        .stderr
-        .take()
-        .ok_or("Could not capture build output.")?;
-
-    {
-        let mut guard = manager.0.lock().map_err(|_| "Build state is poisoned.")?;
+        let mut child = cli::spawn_cmd(&argv).map_err(|e| e.message)?;
+        let (Some(stdout), Some(stderr)) = (child.stdout.take(), child.stderr.take()) else {
+            // `Child::drop` neither kills nor reaps, the same fact behind the
+            // pipe-drain warning on `spawn_cmd`. Letting this child fall out of
+            // scope would leave a build running that nothing can reach, and a
+            // zombie once it exits.
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err("Could not capture build output.".to_string());
+        };
         *guard = Some(ActiveBuild {
             tag: opts.tag.trim().to_string(),
             status: BuildStatus::Running,
@@ -168,8 +173,12 @@ pub fn start_build(app: AppHandle, opts: BuildOptions) -> Result<(), String> {
             buffer: OutputBuffer::default(),
             child: Some(child),
         });
-    }
+        (stdout, stderr)
+    };
 
+    // The readers start only once the guard above has dropped: each one takes
+    // the same lock to record its first line, so starting them underneath it
+    // deadlocks as soon as the build prints anything.
     let out_reader = spawn_reader(app.clone(), "stdout", stdout);
     let err_reader = spawn_reader(app.clone(), "stderr", stderr);
     let waiter = app.clone();
