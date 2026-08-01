@@ -111,6 +111,21 @@ describe("reconcile", () => {
     expect(next.status).toBe("failed");
     expect(next.exitCode).toBe(1);
     expect(next.tag).toBe("app:1");
+    // A build that prints right up to the moment `build-done` lands will have
+    // live lines ahead of the snapshot, so the fix must hold in the merge
+    // branch too — not only when ahead is empty.
+    const withAhead = { ...live, lines: [line(0, "a"), line(1, "b")], nextSeq: 2 };
+    const merged = reconcile(withAhead, running([line(0, "a")], 1));
+    expect(merged.status).toBe("failed");
+  });
+
+  // The `finished` guard must be false when live is still running, or the
+  // outcome spread would overwrite the snapshot's tag with the live empty one
+  // and the modal header would stay blank for the whole build.
+  it("takes tag from the snapshot when the build is still running", () => {
+    const live = running([line(0, "a")], 1);
+    const snapshot = { ...running([line(0, "a")], 1), tag: "app:1" };
+    expect(reconcile(live, snapshot).tag).toBe("app:1");
   });
 
   // The backend counts its own evictions, so the snapshot's tally is the

@@ -161,8 +161,15 @@ export function BuildProvider({ children }: { children: ReactNode }) {
       });
       await attach<BuildDone>(BUILD_DONE_EVENT, payload => {
         setState(s =>
+          // An abandoned build — one the backend could not start both reader
+          // threads for — keeps emitting from the thread that did start. Its
+          // done must not close the build that has already replaced it.
           payload.buildId < s.buildId
             ? s
+            // A done for a build this state never saw (no output events, or
+            // the mount's refresh failed and was swallowed) resets from
+            // IDLE_BUILD so the transcript starts clean; a following refresh
+            // will fill in any backlog.
             : payload.buildId > s.buildId
               ? {
                   ...IDLE_BUILD,
