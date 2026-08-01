@@ -19,6 +19,23 @@ function trimmed(value: string): string | undefined {
   return value.trim() === "" ? undefined : value.trim();
 }
 
+/// A CPU count the backend can actually use, or undefined when the field is
+/// blank.
+///
+/// Everything else has to be caught here rather than sent. `Number("abc")` is
+/// NaN, which serialises to JSON `null` and reaches the backend as "unset", so
+/// the build would quietly run at the default allocation. A negative or
+/// fractional count survives JSON intact and dies in serde instead, putting a
+/// raw deserialiser string in front of the user.
+function positiveInt(value: string): number | undefined {
+  const text = value.trim();
+  if (text === "") return undefined;
+  const parsed = Number(text);
+  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
+}
+
+const CPUS_INVALID = "Builder CPUs must be a whole number of 1 or more.";
+
 /// The build form and the live transcript of the build it starts.
 ///
 /// Closing is not cancelling: the build keeps running and only Cancel Build
@@ -38,45 +55,83 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
   const [cpus, setCpus] = useState("");
   const [memory, setMemory] = useState("");
   const [builderRunning, setBuilderRunning] = useState<boolean | null>(null);
+  const [startingBuilder, setStartingBuilder] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
   const running = build.status === "running";
 
+  // Re-checked whenever the build's status moves, because a builder stopped
+  // from the Builder view while this modal is open would otherwise leave the
+  // status read at mount standing: the build fails with a raw CLI error and
+  // Start Builder is never re-offered short of closing and reopening.
   useEffect(() => {
+    let live = true;
     builderStatus()
-      .then(s => setBuilderRunning(s.running))
+      .then(s => { if (live) setBuilderRunning(s.running); })
       // A builder we cannot ask about is one we should not claim is ready.
-      .catch(() => setBuilderRunning(false));
-  }, []);
+      .catch(() => { if (live) setBuilderRunning(false); });
+    return () => { live = false; };
+  }, [build.status]);
 
+  // A failure belongs to the build that caused it. Cancel in particular can
+  // lose the race with a build that has already finished, and without this the
+  // rejected "no build is running" would sit in red beside the success banner
+  // with no control to dismiss it.
+  useEffect(() => {
+    setError(null);
+  }, [build.status]);
+
+  // Depends on the array, not its length: past the line cap the ring buffer
+  // evicts as fast as it appends, so the length stops changing while the
+  // content keeps moving. Keying on the length would stop following the tail
+  // at exactly the point a long build needs it.
   useEffect(() => {
     const pane = logRef.current;
     if (pane) pane.scrollTop = pane.scrollHeight;
-  }, [build.lines.length]);
+  }, [build.lines]);
 
   async function pickContext() {
-    const chosen = await open({ directory: true, title: "Choose build context" });
-    if (typeof chosen === "string") setContext(chosen);
-  }
-
-  async function pickDockerfile() {
-    const chosen = await open({ directory: false, title: "Choose Dockerfile" });
-    if (typeof chosen === "string") setDockerfile(chosen);
-  }
-
-  async function handleStartBuilder() {
-    setError(null);
     try {
-      await builderStart(trimmed(cpus) ? Number(cpus) : undefined, trimmed(memory));
-      setBuilderRunning(true);
+      const chosen = await open({ directory: true, title: "Choose build context" });
+      if (typeof chosen === "string") setContext(chosen);
     } catch (e) {
       setError(message(e));
     }
   }
 
+  async function pickDockerfile() {
+    try {
+      const chosen = await open({ directory: false, title: "Choose Dockerfile" });
+      if (typeof chosen === "string") setDockerfile(chosen);
+    } catch (e) {
+      setError(message(e));
+    }
+  }
+
+  async function handleStartBuilder() {
+    setError(null);
+    if (cpus.trim() !== "" && positiveInt(cpus) === undefined) {
+      setError(CPUS_INVALID);
+      return;
+    }
+    setStartingBuilder(true);
+    try {
+      await builderStart(positiveInt(cpus), trimmed(memory));
+      setBuilderRunning(true);
+    } catch (e) {
+      setError(message(e));
+    } finally {
+      setStartingBuilder(false);
+    }
+  }
+
   async function handleBuild() {
     setError(null);
+    if (cpus.trim() !== "" && positiveInt(cpus) === undefined) {
+      setError(CPUS_INVALID);
+      return;
+    }
     const opts: BuildOptions = {
       context: context.trim(),
       tag: tag.trim(),
@@ -87,7 +142,7 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
       platform: trimmed(platform),
       labels: filled(labels),
       pull,
-      cpus: trimmed(cpus) ? Number(cpus) : undefined,
+      cpus: positiveInt(cpus),
       memory: trimmed(memory),
     };
     try {
@@ -102,6 +157,7 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
   }
 
   async function handleCancel() {
+    setError(null);
     try {
       await cancelBuild();
     } catch (e) {
@@ -109,6 +165,9 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
     }
   }
 
+  // Called, not rendered as <PairRows />: a nested component is a new type on
+  // every render, so React would remount these inputs on each keystroke and
+  // focus would jump out of the field after the first character.
   function pairRows(
     pairs: KeyValue[],
     setPairs: (next: KeyValue[]) => void,
@@ -161,7 +220,11 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
         {builderRunning === false && (
           <div className={styles.notice}>
             <span>The builder is not running.</span>
-            <button className={styles.iconBtn} onClick={handleStartBuilder}>Start Builder</button>
+            {/* `container builder start` takes seconds; a second click would
+                spawn a second one. */}
+            <button className={styles.iconBtn} onClick={handleStartBuilder} disabled={startingBuilder}>
+              Start Builder
+            </button>
           </div>
         )}
 
@@ -241,7 +304,7 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
             <span className={styles.label}>Labels</span>
             {pairRows(labels, setLabels, "Label")}
             <label className={styles.label} htmlFor="build-cpus">Builder CPUs</label>
-            <input id="build-cpus" className={styles.input} value={cpus} onChange={e => setCpus(e.target.value)} disabled={running} />
+            <input id="build-cpus" className={styles.input} type="number" min={1} step={1} value={cpus} onChange={e => setCpus(e.target.value)} disabled={running} />
             <label className={styles.label} htmlFor="build-memory">Builder memory</label>
             <input id="build-memory" className={styles.input} placeholder="e.g. 8G" value={memory} onChange={e => setMemory(e.target.value)} disabled={running} />
           </div>
