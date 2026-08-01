@@ -34,6 +34,13 @@ import {
   createNetwork,
   deleteNetwork,
   pruneNetworks,
+  startBuild,
+  cancelBuild,
+  getBuildState,
+  builderStatus,
+  builderStart,
+  builderStop,
+  builderDelete,
 } from "../api";
 
 /// Trimmed to the fields we read, but the names and value shapes are copied
@@ -625,5 +632,53 @@ describe("api", () => {
     mockInvoke.mockResolvedValue("");
     await pruneNetworks();
     expect(mockInvoke).toHaveBeenCalledWith("prune_networks");
+  });
+
+  it("startBuild passes the options through untouched", async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    const opts = {
+      context: "/src/app",
+      tag: "app:latest",
+      noCache: true,
+      buildArgs: [{ key: "VERSION", value: "2" }],
+      labels: [],
+      pull: false,
+    };
+    await startBuild(opts as any);
+    expect(invoke).toHaveBeenCalledWith("start_build", { opts });
+  });
+
+  it("getBuildState reads the snapshot", async () => {
+    const snapshot = {
+      buildId: 3, status: "running", tag: "app:latest", exitCode: null,
+      lines: [{ seq: 0, stream: "stdout", line: "step 1" }],
+      nextSeq: 1, dropped: 0,
+    };
+    vi.mocked(invoke).mockResolvedValue(snapshot);
+    await expect(getBuildState()).resolves.toEqual(snapshot);
+  });
+
+  it("cancelBuild takes no arguments", async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    await cancelBuild();
+    expect(invoke).toHaveBeenCalledWith("cancel_build");
+  });
+
+  it("builderStart forwards cpus and memory", async () => {
+    vi.mocked(invoke).mockResolvedValue(undefined);
+    await builderStart(4, "8G");
+    expect(invoke).toHaveBeenCalledWith("builder_start", { cpus: 4, memory: "8G" });
+  });
+
+  it("builderStatus reads the parsed state", async () => {
+    const stopped = {
+      exists: true,
+      running: false,
+      cpus: 2,
+      memoryMb: 2048,
+      raw: "stopped",
+    };
+    vi.mocked(invoke).mockResolvedValue(stopped);
+    await expect(builderStatus()).resolves.toEqual(stopped);
   });
 });

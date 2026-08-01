@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  BuildOptions, BuildState, BuilderState,
   Container, ContainerEdits, ContainerStats, HubResult, Image, Machine,
   MachineEdits, Network, NetworkOptions, RecreatePlan, Volume,
 } from "./types";
@@ -231,3 +232,13 @@ export const deleteNetwork = (name: string): Promise<void> =>
   invoke("delete_network", { name });
 
 export const pruneNetworks = (): Promise<string> => invoke("prune_networks");
+
+export const startBuild = (opts: BuildOptions): Promise<void> => invoke("start_build", { opts });
+export const cancelBuild = (): Promise<void> => invoke("cancel_build");
+export const getBuildState = (): Promise<BuildState> => invoke("get_build_state");
+
+export const builderStatus = (): Promise<BuilderState> => invoke("builder_status");
+export const builderStart = (cpus?: number, memory?: string): Promise<void> =>
+  invoke("builder_start", { cpus, memory });
+export const builderStop = (): Promise<void> => invoke("builder_stop");
+export const builderDelete = (): Promise<void> => invoke("builder_delete");
