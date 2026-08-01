@@ -44,17 +44,17 @@ pub enum BuildStatus {
     Cancelled,
 }
 
-/// A kill makes the process exit non-zero, so a cancel that was asked for
-/// outranks the code the child reports — with one exception. A signalled
-/// process has no exit code at all, so a clean zero means the build finished
-/// on its own and the image exists, whatever the user asked for meanwhile.
+/// A signalled process reports no exit code at all, so an exit code of any
+/// kind means the child was not killed and decided its own outcome: zero built
+/// the image, anything else failed, whatever the user asked for meanwhile. A
+/// requested cancel only decides the status when there is no code to go on,
+/// which is exactly what a kill leaves behind.
 pub fn final_status(cancel_requested: bool, exit_code: Option<i32>) -> BuildStatus {
-    if exit_code == Some(0) {
-        BuildStatus::Succeeded
-    } else if cancel_requested {
-        BuildStatus::Cancelled
-    } else {
-        BuildStatus::Failed
+    match exit_code {
+        Some(0) => BuildStatus::Succeeded,
+        Some(_) => BuildStatus::Failed,
+        None if cancel_requested => BuildStatus::Cancelled,
+        None => BuildStatus::Failed,
     }
 }
 
@@ -583,20 +583,22 @@ mod tests {
         assert_eq!(final_status(false, None), BuildStatus::Failed);
     }
 
-    // A killed process exits non-zero, so without the flag every cancel would
-    // be reported to the user as a build failure.
+    // A kill leaves no exit code at all, so the flag is the only evidence of
+    // what happened and without it every cancel reads as a build failure. A
+    // code that did arrive says the child was never killed: a cancel alongside
+    // it landed on a process that had already exited on its own, and calling
+    // that Cancelled hides a genuine failure the user needs to see.
     #[test]
-    fn a_requested_cancel_outranks_the_exit_code() {
-        assert_eq!(final_status(true, Some(1)), BuildStatus::Cancelled);
+    fn a_requested_cancel_only_decides_when_the_child_was_signalled() {
         assert_eq!(final_status(true, None), BuildStatus::Cancelled);
+        assert_eq!(final_status(true, Some(1)), BuildStatus::Failed);
     }
 
     // Cancel and success are not exclusive: the build can finish while the
     // cancel is still in flight, and killing a process that has exited but not
-    // been reaped still succeeds. A kill leaves no exit code at all, so a clean
-    // zero here can only mean the build completed. Reporting that as Cancelled
-    // tells the user nothing was built while the tagged image sits in
-    // `image ls`, so they never go looking for it.
+    // been reaped still succeeds. Reporting that as Cancelled tells the user
+    // nothing was built while the tagged image sits in `image ls`, so they
+    // never go looking for it.
     #[test]
     fn a_build_that_finished_before_the_cancel_landed_still_succeeded() {
         assert_eq!(final_status(true, Some(0)), BuildStatus::Succeeded);
