@@ -1,5 +1,9 @@
-import { describe, it, expect } from "vitest";
-import { appendLine, reconcile, IDLE_BUILD } from "../../hooks/useBuild";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { render, renderHook, act } from "@testing-library/react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import { StrictMode, createElement } from "react";
+import { appendLine, reconcile, IDLE_BUILD, BuildProvider, useBuild } from "../../hooks/useBuild";
 import type { BuildLine, BuildState } from "../../types";
 
 const BUILD = 7;
@@ -43,6 +47,7 @@ describe("appendLine", () => {
     for (let i = 0; i < 5010; i++) state = appendLine(state, event(i, `line ${i}`));
     expect(state.lines).toHaveLength(5000);
     expect(state.lines[0].line).toBe("line 10");
+    expect(state.dropped).toBe(10);
   });
 
   // A reader thread that outlived an abandoned build keeps emitting. Its seqs
@@ -95,5 +100,99 @@ describe("reconcile", () => {
   it("ignores a snapshot describing a build the events have moved past", () => {
     const live = running([line(0, "new")], 1, BUILD + 1);
     expect(reconcile(live, running([line(0, "old")], 1, BUILD))).toBe(live);
+  });
+
+  // The snapshot is read over a different transport than the events, so one
+  // taken while the build was still running can land after `build-done`. A
+  // finished build must not go back to showing a spinner and a Cancel button.
+  it("does not resurrect a build that has already finished", () => {
+    const live = { ...running([line(0, "a")], 1), status: "failed" as const, exitCode: 1, tag: "app:1" };
+    const next = reconcile(live, running([line(0, "a")], 1));
+    expect(next.status).toBe("failed");
+    expect(next.exitCode).toBe(1);
+    expect(next.tag).toBe("app:1");
+  });
+
+  // The backend counts its own evictions, so the snapshot's tally is the
+  // truth at the moment it was taken; only what the merge itself pushes out
+  // is added on top.
+  it("counts lines the merge evicts on top of the snapshot's tally", () => {
+    const backlog = Array.from({ length: 5000 }, (_, i) => line(i, `line ${i}`));
+    const snapshot = { ...running(backlog, 5000), dropped: 12 };
+    const live = running([line(5000, "a"), line(5001, "b")], 5002);
+    const next = reconcile(live, snapshot);
+    expect(next.lines).toHaveLength(5000);
+    expect(next.dropped).toBe(14);
+  });
+});
+
+describe("BuildProvider", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.clearAllMocks();
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("build-done id guard: drops older, applies matching, adopts newer", async () => {
+    const handlers = new Map<string, (e: { payload: unknown }) => void>();
+    vi.mocked(listen).mockImplementation(async (name, handler) => {
+      handlers.set(String(name), handler as any);
+      return vi.fn();
+    });
+    // getBuildState returns a running build so the provider has a known buildId.
+    vi.mocked(invoke).mockResolvedValue({ ...IDLE_BUILD, buildId: 7, status: "running" });
+
+    const { result } = renderHook(() => useBuild(), { wrapper: BuildProvider });
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(result.current.build.buildId).toBe(7);
+
+    const fire = (payload: object) =>
+      act(() => { handlers.get("build-done")?.({ payload }); });
+
+    // Older id: the state must not change.
+    fire({ buildId: 6, status: "succeeded", tag: "old", exitCode: 0 });
+    expect(result.current.build.buildId).toBe(7);
+    expect(result.current.build.status).toBe("running");
+
+    // Matching id: status, tag, and exitCode are taken from the event.
+    fire({ buildId: 7, status: "failed", tag: "app:1", exitCode: 1 });
+    expect(result.current.build.status).toBe("failed");
+    expect(result.current.build.tag).toBe("app:1");
+    expect(result.current.build.exitCode).toBe(1);
+
+    // Newer id: the event is adopted, wiping the old transcript.
+    fire({ buildId: 8, status: "succeeded", tag: "app:2", exitCode: 0 });
+    expect(result.current.build.buildId).toBe(8);
+    expect(result.current.build.status).toBe("succeeded");
+    expect(result.current.build.lines).toHaveLength(0);
+  });
+
+  // `listen` is async, so cleanup that fires while a subscribe is still in
+  // flight would leak the listener. StrictMode unmounts immediately after
+  // mount in dev; this verifies the in-flight off() call closes that window.
+  it("StrictMode leaves exactly one live subscription pair", async () => {
+    const offs: ReturnType<typeof vi.fn>[] = [];
+    vi.mocked(listen).mockImplementation(async () => {
+      const off = vi.fn();
+      offs.push(off);
+      return off;
+    });
+    vi.mocked(invoke).mockResolvedValue(IDLE_BUILD);
+
+    const { rerender } = render(
+      createElement(StrictMode, null, createElement(BuildProvider, null, null)),
+    );
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+
+    // StrictMode mounts the effect twice; each mount attaches two listeners.
+    expect(listen).toHaveBeenCalledTimes(4);
+    // The first mount's in-flight promises resolve after cleanup; attach calls
+    // their off() immediately so they do not outlive the component.
+    expect(offs.filter(off => off.mock.calls.length > 0)).toHaveLength(2);
+
+    // A re-render with identical props does not re-subscribe.
+    rerender(createElement(StrictMode, null, createElement(BuildProvider, null, null)));
+    await act(async () => { await vi.advanceTimersByTimeAsync(0); });
+    expect(listen).toHaveBeenCalledTimes(4);
   });
 });

@@ -65,10 +65,13 @@ export function appendLine(state: BuildState, incoming: BuildOutput): BuildState
     };
   }
   if (incoming.seq < state.nextSeq) return state;
+  const lines = [...state.lines, incoming];
+  const evicted = Math.max(0, lines.length - MAX_LINES);
   return {
     ...state,
-    lines: [...state.lines, incoming].slice(-MAX_LINES),
+    lines: lines.slice(-MAX_LINES),
     nextSeq: incoming.seq + 1,
+    dropped: state.dropped + evicted,
   };
 }
 
@@ -84,12 +87,28 @@ export function reconcile(current: BuildState, snapshot: BuildState): BuildState
   if (current.buildId > snapshot.buildId) return current;
   if (current.buildId < snapshot.buildId) return snapshot;
 
+  // Invoke responses and events use separate transports in Tauri v2, so a
+  // snapshot taken while the build was running can land after `build-done`
+  // has already advanced the live state to a terminal status. Status is
+  // monotone within one build id, so the live terminal status wins over a
+  // stale "running" from the snapshot.
+  const finished = current.status !== "idle" && current.status !== "running";
+  const outcome = finished && snapshot.status === "running"
+    ? { status: current.status, tag: current.tag, exitCode: current.exitCode }
+    : {};
+
   const ahead = current.lines.filter(l => l.seq >= snapshot.nextSeq);
-  if (ahead.length === 0) return snapshot;
+  if (ahead.length === 0) return { ...snapshot, ...outcome };
+  const merged = [...snapshot.lines, ...ahead];
+  const evicted = Math.max(0, merged.length - MAX_LINES);
   return {
     ...snapshot,
-    lines: [...snapshot.lines, ...ahead].slice(-MAX_LINES),
+    ...outcome,
+    lines: merged.slice(-MAX_LINES),
+    // Lines in any state this module produces are ascending by seq, so the
+    // last element gives the correct next expected sequence number.
     nextSeq: ahead[ahead.length - 1].seq + 1,
+    dropped: snapshot.dropped + evicted,
   };
 }
 
@@ -99,6 +118,9 @@ interface BuildContextValue {
   /// so the tag and the running status appear immediately: `build-output`
   /// events carry lines, not status, so without this the whole build would
   /// stream in while the UI still said idle and offered no Cancel.
+  ///
+  /// Unlike the mount's swallowed refresh, this propagates whatever
+  /// `getBuildState` throws — callers should catch.
   refresh: () => Promise<void>;
 }
 
@@ -139,10 +161,17 @@ export function BuildProvider({ children }: { children: ReactNode }) {
       });
       await attach<BuildDone>(BUILD_DONE_EVENT, payload => {
         setState(s =>
-          // A done from an abandoned build must not finish the current one.
-          payload.buildId !== s.buildId
+          payload.buildId < s.buildId
             ? s
-            : { ...s, status: payload.status, tag: payload.tag, exitCode: payload.exitCode },
+            : payload.buildId > s.buildId
+              ? {
+                  ...IDLE_BUILD,
+                  buildId: payload.buildId,
+                  status: payload.status,
+                  tag: payload.tag,
+                  exitCode: payload.exitCode,
+                }
+              : { ...s, status: payload.status, tag: payload.tag, exitCode: payload.exitCode },
         );
       });
 
