@@ -1,5 +1,6 @@
 pub mod build;
 pub mod build_args;
+pub mod builder;
 pub mod cli;
 pub mod containers;
 pub mod recreate;
@@ -54,6 +55,10 @@ pub fn run() {
             build::start_build,
             build::cancel_build,
             build::get_build_state,
+            builder::builder_status,
+            builder::builder_start,
+            builder::builder_stop,
+            builder::builder_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

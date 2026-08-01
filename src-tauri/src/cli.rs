@@ -30,6 +30,7 @@ fn needs_json(args: &[&str]) -> bool {
         &["network", "ls"],
         &["stats"],
         &["system", "status"],
+        &["builder", "status"],
     ];
     json_prefixes.iter().any(|p| args.starts_with(p))
 }
@@ -119,6 +120,7 @@ mod tests {
             &["network", "ls"][..],
             &["stats", "--no-stream", "c1"][..],
             &["system", "status"][..],
+            &["builder", "status"][..],
         ] {
             assert!(needs_json(args), "{args:?} should be requested as JSON");
         }
