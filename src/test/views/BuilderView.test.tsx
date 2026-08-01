@@ -1,8 +1,9 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act as reactAct, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { BuilderView } from "../../views/BuilderView";
 import { builderStatus, builderStart, builderStop, builderDelete } from "../../api";
+import type { BuilderState } from "../../types";
 
 vi.mock("../../api", () => ({
   builderStatus: vi.fn(),
@@ -103,5 +104,169 @@ describe("BuilderView", () => {
     vi.mocked(builderStatus).mockRejectedValue(new Error("container not found"));
     render(<BuilderView />);
     expect(await screen.findByText("container not found")).toBeInTheDocument();
+  });
+
+  // M11: act must call refresh after a successful action so the view does not
+  // stay stuck on the pre-action state.
+  it("updates the state after an action completes", async () => {
+    vi.mocked(builderStatus)
+      .mockResolvedValueOnce(STOPPED)
+      .mockResolvedValue(RUNNING);
+    render(<BuilderView />);
+    await userEvent.click(await screen.findByRole("button", { name: "Start" }));
+    expect(await screen.findByText("Running")).toBeInTheDocument();
+  });
+
+  // M12: finally must clear confirmDelete so the prompt does not stay open
+  // after a failed delete. The user needs the Delete button back to retry.
+  it("resets the delete confirm after a failed delete", async () => {
+    vi.mocked(builderStatus).mockResolvedValue(STOPPED);
+    vi.mocked(builderDelete).mockRejectedValue(new Error("cannot delete"));
+    render(<BuilderView />);
+    await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Confirm Delete" }));
+    expect(await screen.findByRole("button", { name: "Delete" })).toBeInTheDocument();
+  });
+
+  // M13: StatusDot status prop is driven by the running flag, not hardcoded.
+  // A stopped builder must not display the green running colour.
+  it("shows a stopped colour on the status dot when the builder is stopped", async () => {
+    vi.mocked(builderStatus).mockResolvedValue(STOPPED);
+    render(<BuilderView />);
+    await screen.findByText("Stopped");
+    const dot = screen.getByTestId("dot");
+    // #34c759 is the running colour from StatusDot — it must not appear here.
+    expect(dot).not.toHaveStyle({ background: "#34c759" });
+  });
+
+  // M15: refresh must call setError(null) when keepError is false (the default)
+  // so a stale error banner does not persist after a successful action.
+  it("clears a previous load error once a Start succeeds", async () => {
+    vi.mocked(builderStatus)
+      .mockRejectedValueOnce(new Error("timeout"))
+      .mockResolvedValue(STOPPED);
+    render(<BuilderView />);
+    expect(await screen.findByText("timeout")).toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() => expect(screen.queryByText("timeout")).not.toBeInTheDocument());
+  });
+
+  // M16 + M17: blank cpus must become undefined (not 0), blank memory must
+  // become undefined (not ""), so the CLI uses its own defaults.
+  it("passes undefined for both args when cpus and memory are blank", async () => {
+    vi.mocked(builderStatus).mockResolvedValue(ABSENT);
+    render(<BuilderView />);
+    await screen.findByText("Not created");
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    await waitFor(() =>
+      expect(builderStart).toHaveBeenCalledWith(undefined, undefined),
+    );
+  });
+
+  // M18: exists must default false during the loading window, not true. A true
+  // default would show a Delete button for a builder that may not exist.
+  it("does not show Delete during the initial status check", async () => {
+    vi.mocked(builderStatus).mockReturnValue(new Promise<BuilderState>(() => {}));
+    render(<BuilderView />);
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+  });
+
+  // M19: running must default false during loading. A true default would show
+  // Stop and hide the CPUs / Memory inputs before the status is known.
+  it("shows Start not Stop during the initial status check", async () => {
+    vi.mocked(builderStatus).mockReturnValue(new Promise<BuilderState>(() => {}));
+    render(<BuilderView />);
+    expect(screen.getByRole("button", { name: "Start" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument();
+  });
+
+  // M20: the Cancel button in the delete confirm must call setConfirmDelete(false)
+  // so the Delete button comes back. Without this the user has no way to exit.
+  it("shows Delete again after cancelling the confirm", async () => {
+    vi.mocked(builderStatus).mockResolvedValue(STOPPED);
+    render(<BuilderView />);
+    await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
+    expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
+  });
+
+  // M21: act must call setError(null) before the async action so a previous
+  // error is cleared immediately, not left visible while the action runs.
+  it("clears the previous error as soon as an action starts", async () => {
+    vi.mocked(builderStatus)
+      .mockRejectedValueOnce(new Error("first error"))
+      .mockResolvedValue(STOPPED);
+    let resolve!: () => void;
+    vi.mocked(builderStart).mockReturnValue(new Promise<void>(r => { resolve = r; }));
+    render(<BuilderView />);
+    expect(await screen.findByText("first error")).toBeInTheDocument();
+    // Click without awaiting so the action stays in-flight.
+    userEvent.click(screen.getByRole("button", { name: "Start" }));
+    // The error must be gone before builderStart resolves.
+    await waitFor(() => expect(screen.queryByText("first error")).not.toBeInTheDocument());
+    // Settle the pending action to avoid act() warnings.
+    await reactAct(async () => { resolve(); });
+  });
+
+  // Validates the shared positiveInt path now wired into BuilderView: a
+  // fractional or negative CPU count must not silently reach builderStart.
+  it("refuses a cpu count that is not a positive integer", async () => {
+    vi.mocked(builderStatus).mockResolvedValue(ABSENT);
+    render(<BuilderView />);
+    await userEvent.type(await screen.findByLabelText("CPUs"), "3.5");
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(await screen.findByText(/whole number of 1 or more/i)).toBeInTheDocument();
+    expect(builderStart).not.toHaveBeenCalled();
+  });
+
+  // New: token guard — a stale response that arrives after a newer one has
+  // already landed must be dropped rather than overwriting the current state.
+  it("ignores a status response superseded by a newer refresh", async () => {
+    let resolveStale!: (s: BuilderState) => void;
+    let callCount = 0;
+    vi.mocked(builderStatus).mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        // Mount's request is intentionally slow.
+        return new Promise<BuilderState>(r => { resolveStale = r; });
+      }
+      // Action's refresh resolves quickly.
+      return Promise.resolve(RUNNING);
+    });
+    render(<BuilderView />);
+    // State is null while mount's status is pending — Start is still shown.
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    // Action's refresh resolved; state is now RUNNING.
+    expect(await screen.findByText("Running")).toBeInTheDocument();
+    // The stale mount response arrives carrying STOPPED — must be ignored.
+    await reactAct(async () => { resolveStale(STOPPED); });
+    expect(screen.getByText("Running")).toBeInTheDocument();
+  });
+
+  // New: keepError — a failed action must leave its error visible after the
+  // subsequent refresh. Without keepError=true the refresh would wipe it.
+  it("keeps the action error visible after a failed Start", async () => {
+    vi.mocked(builderStatus).mockResolvedValue(STOPPED);
+    vi.mocked(builderStart).mockRejectedValue(new Error("insufficient memory"));
+    render(<BuilderView />);
+    await userEvent.click(await screen.findByRole("button", { name: "Start" }));
+    expect(await screen.findByText("insufficient memory")).toBeInTheDocument();
+  });
+
+  // New: acting disable — controls must be disabled while an action is in
+  // flight so the user cannot queue up a second concurrent call.
+  it("disables Start and inputs while a start is in flight", async () => {
+    vi.mocked(builderStatus).mockResolvedValue(ABSENT);
+    let resolve!: () => void;
+    vi.mocked(builderStart).mockReturnValue(new Promise<void>(r => { resolve = r; }));
+    render(<BuilderView />);
+    await screen.findByText("Not created");
+    userEvent.click(screen.getByRole("button", { name: "Start" }));
+    // Label changes and button becomes disabled while in-flight.
+    expect(await screen.findByRole("button", { name: "Starting…" })).toBeDisabled();
+    expect(screen.getByLabelText("CPUs")).toBeDisabled();
+    expect(screen.getByLabelText("Memory")).toBeDisabled();
+    await reactAct(async () => { resolve(); });
   });
 });

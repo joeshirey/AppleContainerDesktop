@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { startBuild, cancelBuild, builderStatus, builderStart } from "../api";
 import { useBuild } from "../hooks/useBuild";
+import { positiveInt, CPUS_INVALID } from "../lib/validation";
 import type { BuildOptions, KeyValue } from "../types";
 import styles from "./BuildModal.module.css";
 
@@ -18,23 +19,6 @@ function filled(pairs: KeyValue[]): KeyValue[] {
 function trimmed(value: string): string | undefined {
   return value.trim() === "" ? undefined : value.trim();
 }
-
-/// A CPU count the backend can actually use, or undefined when the field is
-/// blank.
-///
-/// Everything else has to be caught here rather than sent. `Number("abc")` is
-/// NaN, which serialises to JSON `null` and reaches the backend as "unset", so
-/// the build would quietly run at the default allocation. A negative or
-/// fractional count survives JSON intact and dies in serde instead, putting a
-/// raw deserialiser string in front of the user.
-function positiveInt(value: string): number | undefined {
-  const text = value.trim();
-  if (text === "") return undefined;
-  const parsed = Number(text);
-  return Number.isInteger(parsed) && parsed > 0 ? parsed : undefined;
-}
-
-const CPUS_INVALID = "Builder CPUs must be a whole number of 1 or more.";
 
 /// The build form and the live transcript of the build it starts.
 ///

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { builderStatus, builderStart, builderStop, builderDelete } from "../api";
 import { StatusDot } from "../components/StatusDot";
+import { positiveInt, CPUS_INVALID } from "../lib/validation";
 import type { BuilderState } from "../types";
 import styles from "./BuilderView.module.css";
 
@@ -14,28 +15,61 @@ export function BuilderView() {
   const [memory, setMemory] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [acting, setActing] = useState(false);
+  const tokenRef = useRef(0);
 
-  const refresh = useCallback(async () => {
+  // Each call claims a token by incrementing the counter before the async
+  // fetch. State updates are discarded when the token no longer matches the
+  // counter — which happens on unmount (the cleanup bumps the counter) or when
+  // a newer refresh supersedes this one.
+  const refresh = useCallback(async ({ keepError = false }: { keepError?: boolean } = {}) => {
+    const token = ++tokenRef.current;
     try {
-      setState(await builderStatus());
-      setError(null);
+      const s = await builderStatus();
+      if (token !== tokenRef.current) return;
+      setState(s);
+      if (!keepError) setError(null);
     } catch (e) {
+      if (token !== tokenRef.current) return;
       setError(message(e));
     }
   }, []);
 
-  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    refresh();
+    // Invalidate any pending refresh when the component unmounts so a stale
+    // response cannot overwrite state on an already-gone component.
+    return () => { tokenRef.current++; };
+  }, [refresh]);
 
   async function act(action: () => Promise<void>) {
+    // Clear any leftover error before the new action so the banner does not
+    // persist during a retry.
     setError(null);
+    setActing(true);
     try {
       await action();
       await refresh();
     } catch (e) {
       setError(message(e));
+      // Refresh even on failure: the action may have partially succeeded (e.g.
+      // the builder container was created but failed to boot) and the user
+      // needs to see the real state to decide what to do next.
+      await refresh({ keepError: true });
     } finally {
+      setActing(false);
       setConfirmDelete(false);
     }
+  }
+
+  function handleStart() {
+    if (cpus.trim() !== "" && positiveInt(cpus) === undefined) {
+      setError(CPUS_INVALID);
+      return;
+    }
+    // Don't await — the return value of event handlers is ignored by React,
+    // and the async work is tracked through `acting` state instead.
+    void act(() => builderStart(positiveInt(cpus), memory.trim() || undefined));
   }
 
   const exists = state?.exists ?? false;
@@ -76,23 +110,47 @@ export function BuilderView() {
           <>
             <div className={styles.field}>
               <label className={styles.label} htmlFor="builder-cpus">CPUs</label>
-              <input id="builder-cpus" className={styles.input} value={cpus} onChange={e => setCpus(e.target.value)} />
+              <input
+                id="builder-cpus"
+                className={styles.input}
+                type="number"
+                min={1}
+                step={1}
+                placeholder="e.g. 4"
+                value={cpus}
+                onChange={e => setCpus(e.target.value)}
+                disabled={acting}
+              />
             </div>
             <div className={styles.field}>
               <label className={styles.label} htmlFor="builder-memory">Memory</label>
-              <input id="builder-memory" className={styles.input} placeholder="e.g. 8G" value={memory} onChange={e => setMemory(e.target.value)} />
+              <input
+                id="builder-memory"
+                className={styles.input}
+                placeholder="e.g. 8G"
+                value={memory}
+                onChange={e => setMemory(e.target.value)}
+                disabled={acting}
+              />
             </div>
           </>
         )}
         <div className={styles.actions}>
           {running ? (
-            <button className={styles.btn} onClick={() => act(() => builderStop())}>Stop</button>
+            <button
+              className={styles.btn}
+              onClick={() => act(() => builderStop())}
+              disabled={acting}
+            >
+              Stop
+            </button>
           ) : (
             <button
               className={styles.btn}
-              onClick={() => act(() => builderStart(cpus.trim() ? Number(cpus) : undefined, memory.trim() || undefined))}
+              onClick={handleStart}
+              disabled={acting}
             >
-              Start
+              {acting ? "Starting…" : "Start"}
             </button>
           )}
           {/*
@@ -106,11 +164,29 @@ export function BuilderView() {
             !running &&
             (confirmDelete ? (
               <>
-                <button className={styles.btnDanger} onClick={() => act(() => builderDelete())}>Confirm Delete</button>
-                <button className={styles.btn} onClick={() => setConfirmDelete(false)}>Cancel</button>
+                <button
+                  className={styles.btnDanger}
+                  onClick={() => act(() => builderDelete())}
+                  disabled={acting}
+                >
+                  Confirm Delete
+                </button>
+                <button
+                  className={styles.btn}
+                  onClick={() => setConfirmDelete(false)}
+                  disabled={acting}
+                >
+                  Cancel
+                </button>
               </>
             ) : (
-              <button className={styles.btnDanger} onClick={() => setConfirmDelete(true)}>Delete</button>
+              <button
+                className={styles.btnDanger}
+                onClick={() => setConfirmDelete(true)}
+                disabled={acting}
+              >
+                Delete
+              </button>
             ))}
         </div>
       </div>
