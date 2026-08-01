@@ -228,15 +228,22 @@ fn read_capped_line<R: BufRead>(reader: &mut R) -> Option<String> {
     if read == 0 {
         return None;
     }
-    let truncated = read as u64 == MAX_LINE_BYTES && buf.last() != Some(&b'\n');
-    if truncated {
-        skip_rest_of_line(reader);
+    // Hitting the cap without the delimiter does not prove anything was lost:
+    // a line of exactly `MAX_LINE_BYTES` plus its newline reads as full content
+    // with the delimiter just out of reach. Only the skip knows whether real
+    // bytes went in the bin, and a marker on a line that is in fact complete
+    // tells the user to go looking for output that was never cut.
+    let mut truncated = false;
+    if read as u64 == MAX_LINE_BYTES && buf.last() != Some(&b'\n') {
+        truncated = skip_rest_of_line(reader);
     }
     if buf.last() == Some(&b'\n') {
         buf.pop();
-        if buf.last() == Some(&b'\r') {
-            buf.pop();
-        }
+    }
+    // A `\r` at the end of a line that really ended is the other half of a
+    // CRLF, whose `\n` was either just popped or sat past the cap.
+    if !truncated && buf.last() == Some(&b'\r') {
+        buf.pop();
     }
     // Build output is whatever the RUN steps happen to print, so a stray byte
     // that is not valid UTF-8 is ordinary. Refusing the line would end the
@@ -250,10 +257,12 @@ fn read_capped_line<R: BufRead>(reader: &mut R) -> Option<String> {
     Some(text)
 }
 
-/// Throw away the tail of an over-long line, still a bounded chunk at a time.
+/// Throw away the tail of an over-long line, still a bounded chunk at a time,
+/// and report whether any of it was content rather than the delimiter alone.
 /// The bytes are not wanted but they do have to be read: leaving them in the
 /// pipe is the same stall as not reading it at all.
-fn skip_rest_of_line<R: BufRead>(reader: &mut R) {
+fn skip_rest_of_line<R: BufRead>(reader: &mut R) -> bool {
+    let mut discarded = false;
     loop {
         let mut discard = Vec::new();
         match reader
@@ -262,10 +271,18 @@ fn skip_rest_of_line<R: BufRead>(reader: &mut R) {
             .read_until(b'\n', &mut discard)
         {
             // End of stream, or a pipe that will not read again.
-            Ok(0) | Err(_) => return,
-            // Reached the newline; the next line starts clean.
-            Ok(_) if discard.last() == Some(&b'\n') => return,
-            Ok(_) => {}
+            Ok(0) | Err(_) => return discarded,
+            Ok(read) => {
+                if discard.last() == Some(&b'\n') {
+                    // Reached the newline; the next line starts clean. Nothing
+                    // but the delimiter, `\n` or the `\r\n` whose `\r` fell
+                    // past the cap, means the line ended exactly at the cap
+                    // with none of its content lost.
+                    let delimiter = if discard.ends_with(b"\r\n") { 2 } else { 1 };
+                    return discarded || read > delimiter;
+                }
+                discarded = true;
+            }
         }
     }
 }
