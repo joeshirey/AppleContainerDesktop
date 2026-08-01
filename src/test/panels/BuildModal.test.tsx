@@ -1,11 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { open } from "@tauri-apps/plugin-dialog";
 import { BuildModal } from "../../panels/BuildModal";
 import { startBuild, cancelBuild, builderStatus, builderStart } from "../../api";
 import { IDLE_BUILD } from "../../hooks/useBuild";
-import type { BuildState } from "../../types";
+import type { BuilderState, BuildState } from "../../types";
 
 vi.mock("../../api", () => ({
   startBuild: vi.fn(),
@@ -148,6 +148,22 @@ describe("BuildModal", () => {
 
     expect(await screen.findByText(/whole number of 1 or more/i)).toBeInTheDocument();
     expect(startBuild).not.toHaveBeenCalled();
+  });
+
+  // Start Builder is the other door onto the same field. Unguarded, a count
+  // positiveInt rejects arrives at builderStart as undefined, the builder comes
+  // up at the default allocation and the notice disappears as though the typed
+  // count had been honoured.
+  it("refuses a builder CPU count when starting the builder too", async () => {
+    vi.mocked(builderStatus).mockResolvedValue(BUILDER_DOWN);
+    render(<BuildModal onClose={vi.fn()} />);
+    await screen.findByRole("button", { name: "Start Builder" });
+    await userEvent.click(screen.getByRole("button", { name: "Advanced" }));
+    await userEvent.type(screen.getByLabelText("Builder CPUs"), "3.5");
+    await userEvent.click(screen.getByRole("button", { name: "Start Builder" }));
+
+    expect(await screen.findByText(/whole number of 1 or more/i)).toBeInTheDocument();
+    expect(builderStart).not.toHaveBeenCalled();
   });
 
   it("surfaces a build the backend refuses to start", async () => {
@@ -312,16 +328,67 @@ describe("BuildModal", () => {
     expect(builderStart).toHaveBeenCalledTimes(1);
   });
 
-  it("says nothing about the builder when it is already up", async () => {
+  it("re-enables Start Builder after a start that failed", async () => {
+    vi.mocked(builderStatus).mockResolvedValue(BUILDER_DOWN);
+    vi.mocked(builderStart).mockRejectedValue(new Error("insufficient host memory"));
+    render(<BuildModal onClose={vi.fn()} />);
+
+    const start = await screen.findByRole("button", { name: "Start Builder" });
+    await userEvent.click(start);
+
+    expect(await screen.findByText("insufficient host memory")).toBeInTheDocument();
+    // The resolve path unmounts the notice, so this is the only path on which
+    // the button is still on screen to be retried once the memory is freed.
+    expect(start).toBeEnabled();
+  });
+
+  // `builderRunning` is a tri-state and null is not false. This is the window
+  // while `container builder status` is still spawning, where the answer is
+  // not known yet: `!builderRunning` would announce "The builder is not
+  // running" for those few hundred milliseconds on every open, builder up or
+  // down. Never resolving holds the modal in that window for the assertion.
+  it("says nothing about the builder until the status has landed", async () => {
+    vi.mocked(builderStatus).mockReturnValue(new Promise<BuilderState>(() => {}));
     render(<BuildModal onClose={vi.fn()} />);
     await screen.findByRole("button", { name: "Build" });
-    await waitFor(() => expect(builderStatus).toHaveBeenCalled());
-    // An interaction flushes the effect's resolution, so the absences below are
-    // checked after the status has been applied rather than before it lands.
-    await userEvent.click(screen.getByLabelText("No cache"));
 
     expect(screen.queryByRole("button", { name: "Start Builder" })).not.toBeInTheDocument();
     expect(screen.queryByText(/builder is not running/i)).not.toBeInTheDocument();
+  });
+
+  it("re-checks the builder when the build's status changes", async () => {
+    mockState = { ...IDLE_BUILD, status: "running", tag: "app:latest" };
+    const { rerender } = render(<BuildModal onClose={vi.fn()} />);
+    await waitFor(() => expect(builderStatus).toHaveBeenCalledTimes(1));
+    expect(screen.queryByRole("button", { name: "Start Builder" })).not.toBeInTheDocument();
+
+    // Stopped from the Builder view while this modal sat open. Read once at
+    // mount, the modal would fail the build with a raw CLI error and never
+    // re-offer Start.
+    vi.mocked(builderStatus).mockResolvedValue(BUILDER_DOWN);
+    mockState = { ...mockState, status: "failed" };
+    rerender(<BuildModal onClose={vi.fn()} />);
+
+    expect(await screen.findByRole("button", { name: "Start Builder" })).toBeInTheDocument();
+  });
+
+  it("ignores a builder status that lands after the modal has moved on", async () => {
+    let landSlow: (s: BuilderState) => void = () => {};
+    vi.mocked(builderStatus)
+      .mockReturnValueOnce(new Promise<BuilderState>(r => { landSlow = r; }))
+      .mockResolvedValueOnce(BUILDER_UP);
+
+    mockState = { ...IDLE_BUILD, status: "running", tag: "app:latest" };
+    const { rerender } = render(<BuildModal onClose={vi.fn()} />);
+
+    mockState = { ...mockState, status: "succeeded" };
+    rerender(<BuildModal onClose={vi.fn()} />);
+    await waitFor(() => expect(builderStatus).toHaveBeenCalledTimes(2));
+
+    // The mount's request finally answers, carrying the stale reading.
+    await act(async () => { landSlow(BUILDER_DOWN); });
+
+    expect(screen.queryByRole("button", { name: "Start Builder" })).not.toBeInTheDocument();
   });
 
   it("shows the exit code when a build fails", async () => {
