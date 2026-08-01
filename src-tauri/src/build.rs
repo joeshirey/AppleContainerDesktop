@@ -9,7 +9,7 @@ use crate::cli;
 use serde::Serialize;
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read};
-use std::process::Child;
+use std::process::{Child, ChildStderr, ChildStdout};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -178,28 +178,61 @@ pub fn start_build(app: AppHandle, opts: BuildOptions) -> Result<(), String> {
         (stdout, stderr)
     };
 
-    // The readers start only once the guard above has dropped: each one takes
-    // the same lock to record its first line, so starting them underneath it
-    // deadlocks as soon as the build prints anything.
-    let out_reader = spawn_reader(app.clone(), "stdout", stdout);
-    let err_reader = spawn_reader(app.clone(), "stderr", stderr);
-    let waiter = app.clone();
-    std::thread::spawn(move || {
-        // Joining the readers is how this thread learns the build is over: EOF
-        // arrives when the last copy of the pipe write end closes, which is the
-        // child exiting only for as long as the CLI keeps those descriptors to
-        // itself. Measured against container 1.2.0 on 2026-07-30 — the CLI
-        // spawns no local helpers (it drives the build over XPC), holds fds 1
-        // and 2 alone, and both readers saw EOF in the same instant it exited,
-        // on a clean build and on a SIGKILL alike. A future version that forks
-        // a helper inheriting those fds would strand this thread in `join`,
-        // leaving the build stuck at Running and refusing every later start.
-        let _ = out_reader.join();
-        let _ = err_reader.join();
-        finish(&waiter);
-    });
+    // The threads start only once the guard above has dropped: each reader
+    // takes the same lock to record its first line, so starting them underneath
+    // it deadlocks as soon as the build prints anything.
+    if let Err(e) = start_threads(&app, stdout, stderr) {
+        // The build is installed and Running by now, so leaving it there would
+        // hold that status for the life of the app and refuse every later
+        // build. Put the state back and take the child with it.
+        abandon(manager.inner());
+        return Err(format!("Could not start the build: {e}"));
+    }
 
     Ok(())
+}
+
+/// Start the two readers and the waiter that ends the build.
+///
+/// A thread that cannot start is reported rather than fatal: `thread::spawn`
+/// panics when the OS refuses, and a panic here would take down a command
+/// invocation with a live child already installed.
+fn start_threads(app: &AppHandle, stdout: ChildStdout, stderr: ChildStderr) -> std::io::Result<()> {
+    let out_reader = spawn_reader(app.clone(), "stdout", stdout)?;
+    // If this one fails, the reader above is left running: it sees EOF as soon
+    // as `abandon` kills the child, and exits on its own.
+    let err_reader = spawn_reader(app.clone(), "stderr", stderr)?;
+    let waiter = app.clone();
+    std::thread::Builder::new()
+        .name("build-waiter".to_string())
+        .spawn(move || {
+            // Joining the readers is how this thread learns the build is over:
+            // EOF arrives when the last copy of the pipe write end closes,
+            // which is the child exiting only for as long as the CLI keeps
+            // those descriptors to itself. Measured against container 1.2.0 on
+            // 2026-07-30 — the CLI spawns no local helpers (it drives the build
+            // over XPC), holds fds 1 and 2 alone, and both readers saw EOF in
+            // the same instant it exited, on a clean build and on a SIGKILL
+            // alike. A future version that forked a helper inheriting those fds
+            // would strand this thread in `join`, leaving the build stuck at
+            // Running and refusing every later start.
+            let _ = out_reader.join();
+            let _ = err_reader.join();
+            finish(&waiter);
+        })?;
+    Ok(())
+}
+
+/// Throw away a build that was installed but never got its threads, so the
+/// next one is not refused by a `Running` status nothing will ever end.
+fn abandon(manager: &BuildManager) {
+    let Ok(mut guard) = manager.0.lock() else {
+        return;
+    };
+    if let Some(mut child) = guard.take().and_then(|mut active| active.child.take()) {
+        let _ = child.kill();
+        let _ = child.wait();
+    }
 }
 
 /// Long enough for any real build diagnostic, short enough that one runaway
@@ -291,23 +324,25 @@ fn spawn_reader<R: Read + Send + 'static>(
     app: AppHandle,
     stream: &'static str,
     source: R,
-) -> std::thread::JoinHandle<()> {
-    std::thread::spawn(move || {
-        let mut reader = BufReader::new(source);
-        while let Some(text) = read_capped_line(&mut reader) {
-            let manager = app.state::<BuildManager>();
-            let entry = {
-                let Ok(mut guard) = manager.0.lock() else {
-                    break;
+) -> std::io::Result<std::thread::JoinHandle<()>> {
+    std::thread::Builder::new()
+        .name(format!("build-{stream}"))
+        .spawn(move || {
+            let mut reader = BufReader::new(source);
+            while let Some(text) = read_capped_line(&mut reader) {
+                let manager = app.state::<BuildManager>();
+                let entry = {
+                    let Ok(mut guard) = manager.0.lock() else {
+                        break;
+                    };
+                    match guard.as_mut() {
+                        Some(active) => active.buffer.push(stream, text),
+                        None => break,
+                    }
                 };
-                match guard.as_mut() {
-                    Some(active) => active.buffer.push(stream, text),
-                    None => break,
-                }
-            };
-            let _ = app.emit(BUILD_OUTPUT_EVENT, &entry);
-        }
-    })
+                let _ = app.emit(BUILD_OUTPUT_EVENT, &entry);
+            }
+        })
 }
 
 /// Reap the finished child and announce how the build ended.
