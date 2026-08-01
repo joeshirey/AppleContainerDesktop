@@ -86,10 +86,22 @@ mod tests {
     #[test]
     fn sequence_numbers_are_monotonic_across_both_streams() {
         let mut buf = OutputBuffer::default();
-        assert_eq!(buf.push("stdout", "one".into()).seq, 0);
-        assert_eq!(buf.push("stderr", "two".into()).seq, 1);
-        assert_eq!(buf.push("stdout", "three".into()).seq, 2);
+        let r0 = buf.push("stdout", "one".into());
+        let r1 = buf.push("stderr", "two".into());
+        let r2 = buf.push("stdout", "three".into());
+        assert_eq!(r0.seq, 0);
+        assert_eq!(r1.seq, 1);
+        assert_eq!(r2.seq, 2);
         assert_eq!(buf.next_seq(), 3);
+        // The returned entry must match what the snapshot stores; if they
+        // diverge, live stderr renders correctly but every stderr line replayed
+        // from a snapshot comes back as stdout, silently dropping error
+        // highlighting across the whole transcript.
+        let snapshot = buf.snapshot();
+        assert_eq!(snapshot[1].stream, "stderr");
+        assert_eq!(snapshot[0].seq, r0.seq);
+        assert_eq!(snapshot[1].seq, r1.seq);
+        assert_eq!(snapshot[2].seq, r2.seq);
     }
 
     #[test]
@@ -102,6 +114,10 @@ mod tests {
         assert_eq!(snapshot.len(), MAX_LINES);
         assert_eq!(snapshot[0].line, "line 10");
         assert_eq!(buf.dropped(), 10);
+        // The first surviving line's seq must equal the number dropped so the
+        // frontend can detect any gap: if snapshot[0].seq > dropped, events are
+        // missing without a visible discontinuity in the transcript.
+        assert_eq!(snapshot[0].seq, buf.dropped());
     }
 
     // Dropping lines silently would make a truncated transcript look complete,
