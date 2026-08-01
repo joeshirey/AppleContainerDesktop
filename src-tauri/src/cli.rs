@@ -75,12 +75,15 @@ pub fn run_cmd(args: &[&str]) -> Result<Value, CmdError> {
     }
 }
 
-/// Start `container <args>` with both output streams piped, returning the
-/// child without waiting for it.
+/// Start `container <args>` with stdout and stderr piped and stdin closed,
+/// returning the child without waiting for it.
 ///
 /// `run_cmd` blocks until exit and parses the result, which is right for every
 /// command that finishes in under a second. A build does not, and its output
 /// matters while it runs, so it needs the process handle instead.
+///
+/// Both pipes must be drained continuously; if either reading thread stops
+/// before the child exits, the child will block once the pipe buffer fills.
 pub fn spawn_cmd(args: &[String]) -> Result<Child, CmdError> {
     Command::new(container_bin())
         .args(args)
