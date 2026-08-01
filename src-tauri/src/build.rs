@@ -10,6 +10,7 @@ use serde::Serialize;
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Read};
 use std::process::{Child, ChildStderr, ChildStdout};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 
@@ -103,6 +104,7 @@ pub const BUILD_OUTPUT_EVENT: &str = "build-output";
 pub const BUILD_DONE_EVENT: &str = "build-done";
 
 pub struct ActiveBuild {
+    build_id: u64,
     tag: String,
     status: BuildStatus,
     exit_code: Option<i32>,
@@ -113,11 +115,25 @@ pub struct ActiveBuild {
 }
 
 #[derive(Default)]
-pub struct BuildManager(pub Mutex<Option<ActiveBuild>>);
+pub struct BuildManager {
+    /// The running build, or the last one to finish.
+    pub active: Mutex<Option<ActiveBuild>>,
+    /// Ids come from here rather than from the build itself, so they keep
+    /// climbing across builds even when the state is cleared.
+    next_id: AtomicU64,
+}
+
+impl BuildManager {
+    /// Ids start at 1, leaving 0 to mean "no build has run yet".
+    fn next_build_id(&self) -> u64 {
+        self.next_id.fetch_add(1, Ordering::Relaxed) + 1
+    }
+}
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildStateDto {
+    pub build_id: u64,
     pub status: BuildStatus,
     pub tag: String,
     pub exit_code: Option<i32>,
@@ -126,9 +142,24 @@ pub struct BuildStateDto {
     pub dropped: u64,
 }
 
+/// One line of build output, tagged with the build it came from.
+///
+/// `seq` restarts at 0 for every build, so without the id an event that
+/// arrives after the pane has switched to the next build is indistinguishable
+/// from one of its own. The frontend drops any event whose `buildId` does not
+/// match the snapshot it is holding.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildOutput {
+    pub build_id: u64,
+    #[serde(flatten)]
+    pub line: BuildLine,
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct BuildDone {
+    pub build_id: u64,
     pub status: BuildStatus,
     pub tag: String,
     pub exit_code: Option<i32>,
@@ -150,7 +181,10 @@ pub fn start_build(app: AppHandle, opts: BuildOptions) -> Result<(), String> {
     // status belonging to the first. Holding the lock across the spawn costs
     // nothing, since `spawn_cmd` returns as soon as the child is running.
     let (stdout, stderr) = {
-        let mut guard = manager.0.lock().map_err(|_| "Build state is poisoned.")?;
+        let mut guard = manager
+            .active
+            .lock()
+            .map_err(|_| "Build state is poisoned.")?;
         if guard
             .as_ref()
             .is_some_and(|b| b.status == BuildStatus::Running)
@@ -168,6 +202,7 @@ pub fn start_build(app: AppHandle, opts: BuildOptions) -> Result<(), String> {
             return Err("Could not capture build output.".to_string());
         };
         *guard = Some(ActiveBuild {
+            build_id: manager.next_build_id(),
             tag: opts.tag.trim().to_string(),
             status: BuildStatus::Running,
             exit_code: None,
@@ -226,7 +261,7 @@ fn start_threads(app: &AppHandle, stdout: ChildStdout, stderr: ChildStderr) -> s
 /// Throw away a build that was installed but never got its threads, so the
 /// next one is not refused by a `Running` status nothing will ever end.
 fn abandon(manager: &BuildManager) {
-    let Ok(mut guard) = manager.0.lock() else {
+    let Ok(mut guard) = manager.active.lock() else {
         return;
     };
     if let Some(mut child) = guard.take().and_then(|mut active| active.child.take()) {
@@ -328,19 +363,29 @@ fn spawn_reader<R: Read + Send + 'static>(
     std::thread::Builder::new()
         .name(format!("build-{stream}"))
         .spawn(move || {
+            // Looked up once: this is a type-keyed map lookup, and there is one
+            // of these per line of build output.
+            let manager = app.state::<BuildManager>();
             let mut reader = BufReader::new(source);
             while let Some(text) = read_capped_line(&mut reader) {
-                let manager = app.state::<BuildManager>();
-                let entry = {
-                    let Ok(mut guard) = manager.0.lock() else {
+                let event = {
+                    let Ok(mut guard) = manager.active.lock() else {
                         break;
                     };
                     match guard.as_mut() {
-                        Some(active) => active.buffer.push(stream, text),
+                        Some(active) => BuildOutput {
+                            build_id: active.build_id,
+                            line: active.buffer.push(stream, text),
+                        },
+                        // Unreachable: nothing puts the state back to None
+                        // while a build has readers attached. If that ever
+                        // changes, breaking here stops draining the pipe and
+                        // hangs the child on its next write — the failure the
+                        // capped reader exists to avoid.
                         None => break,
                     }
                 };
-                let _ = app.emit(BUILD_OUTPUT_EVENT, &entry);
+                let _ = app.emit(BUILD_OUTPUT_EVENT, &event);
             }
         })
 }
@@ -351,7 +396,7 @@ fn spawn_reader<R: Read + Send + 'static>(
 fn finish(app: &AppHandle) {
     let manager = app.state::<BuildManager>();
     let child = {
-        let Ok(mut guard) = manager.0.lock() else {
+        let Ok(mut guard) = manager.active.lock() else {
             return;
         };
         let Some(active) = guard.as_mut() else {
@@ -372,7 +417,7 @@ fn finish(app: &AppHandle) {
     // The build is still Running here, and `start_build` refuses while a build
     // is running, so nothing can have replaced the state in the gap above.
     let done = {
-        let Ok(mut guard) = manager.0.lock() else {
+        let Ok(mut guard) = manager.active.lock() else {
             return;
         };
         let Some(active) = guard.as_mut() else {
@@ -381,6 +426,7 @@ fn finish(app: &AppHandle) {
         active.exit_code = code;
         active.status = final_status(active.cancel_requested, code);
         BuildDone {
+            build_id: active.build_id,
             status: active.status,
             tag: active.tag.clone(),
             exit_code: code,
@@ -392,7 +438,10 @@ fn finish(app: &AppHandle) {
 #[tauri::command]
 pub fn cancel_build(app: AppHandle) -> Result<(), String> {
     let manager = app.state::<BuildManager>();
-    let mut guard = manager.0.lock().map_err(|_| "Build state is poisoned.")?;
+    let mut guard = manager
+        .active
+        .lock()
+        .map_err(|_| "Build state is poisoned.")?;
     let Some(active) = guard.as_mut() else {
         return Err("No build is running.".to_string());
     };
@@ -418,9 +467,13 @@ pub fn cancel_build(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 pub fn get_build_state(app: AppHandle) -> Result<BuildStateDto, String> {
     let manager = app.state::<BuildManager>();
-    let guard = manager.0.lock().map_err(|_| "Build state is poisoned.")?;
+    let guard = manager
+        .active
+        .lock()
+        .map_err(|_| "Build state is poisoned.")?;
     Ok(match guard.as_ref() {
         Some(active) => BuildStateDto {
+            build_id: active.build_id,
             status: active.status,
             tag: active.tag.clone(),
             exit_code: active.exit_code,
@@ -429,6 +482,7 @@ pub fn get_build_state(app: AppHandle) -> Result<BuildStateDto, String> {
             dropped: active.buffer.dropped(),
         },
         None => BuildStateDto {
+            build_id: 0,
             status: BuildStatus::Idle,
             tag: String::new(),
             exit_code: None,
