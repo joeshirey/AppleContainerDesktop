@@ -31,6 +31,9 @@ describe("BuilderView", () => {
     expect(await screen.findByText("Not created")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
+    // cpus and memoryMb are null — no allocation span should appear.
+    expect(screen.queryByText(/null CPUs/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/null MB/)).not.toBeInTheDocument();
 
     await userEvent.click(screen.getByRole("button", { name: "Start" }));
     await waitFor(() => expect(builderStart).toHaveBeenCalled());
@@ -43,6 +46,9 @@ describe("BuilderView", () => {
     render(<BuilderView />);
     expect(await screen.findByText("Stopped")).toBeInTheDocument();
     expect(screen.getByText("2 CPUs · 2048 MB")).toBeInTheDocument();
+    // The raw "stopped" string must not appear as a separate span — "Stopped"
+    // is the recognised label and suppresses the raw display.
+    expect(screen.queryByText("stopped")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Stop" })).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Delete" })).toBeInTheDocument();
 
@@ -66,6 +72,9 @@ describe("BuilderView", () => {
     vi.mocked(builderStatus).mockResolvedValue(RUNNING);
     render(<BuilderView />);
     expect(await screen.findByText("Running")).toBeInTheDocument();
+    // The raw "running" string must not appear as a separate span — "Running"
+    // is the recognised label and suppresses the raw display.
+    expect(screen.queryByText("running")).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete" })).not.toBeInTheDocument();
     await userEvent.click(screen.getByRole("button", { name: "Stop" }));
     await waitFor(() => expect(builderStop).toHaveBeenCalled());
