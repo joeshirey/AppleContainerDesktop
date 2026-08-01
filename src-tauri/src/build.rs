@@ -4,8 +4,14 @@
 //! worth testing on their own, the ring buffer and the exit-status decision,
 //! are plain values with no process behind them.
 
+use crate::build_args::{self, BuildOptions};
+use crate::cli;
 use serde::Serialize;
 use std::collections::VecDeque;
+use std::io::{BufRead, BufReader, Read};
+use std::process::Child;
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, Manager};
 
 /// How many lines the ring buffer retains before it starts evicting the oldest.
 /// This bounds the number of lines held, not their total byte size — a single
@@ -89,6 +95,253 @@ impl OutputBuffer {
     pub fn dropped(&self) -> u64 {
         self.dropped
     }
+}
+
+pub const BUILD_OUTPUT_EVENT: &str = "build-output";
+pub const BUILD_DONE_EVENT: &str = "build-done";
+
+pub struct ActiveBuild {
+    tag: String,
+    status: BuildStatus,
+    exit_code: Option<i32>,
+    cancel_requested: bool,
+    buffer: OutputBuffer,
+    /// Taken by the waiter thread once both pipes have closed.
+    child: Option<Child>,
+}
+
+#[derive(Default)]
+pub struct BuildManager(pub Mutex<Option<ActiveBuild>>);
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildStateDto {
+    pub status: BuildStatus,
+    pub tag: String,
+    pub exit_code: Option<i32>,
+    pub lines: Vec<BuildLine>,
+    pub next_seq: u64,
+    pub dropped: u64,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct BuildDone {
+    pub status: BuildStatus,
+    pub tag: String,
+    pub exit_code: Option<i32>,
+}
+
+#[tauri::command]
+pub fn start_build(app: AppHandle, opts: BuildOptions) -> Result<(), String> {
+    let dockerfile = build_args::validate(&opts)?;
+
+    let manager = app.state::<BuildManager>();
+    {
+        let guard = manager.0.lock().map_err(|_| "Build state is poisoned.")?;
+        if guard
+            .as_ref()
+            .is_some_and(|b| b.status == BuildStatus::Running)
+        {
+            return Err("A build is already running.".to_string());
+        }
+    }
+
+    let argv = build_args::build_argv(&opts, &dockerfile);
+    let mut child = cli::spawn_cmd(&argv).map_err(|e| e.message)?;
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or("Could not capture build output.")?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or("Could not capture build output.")?;
+
+    {
+        let mut guard = manager.0.lock().map_err(|_| "Build state is poisoned.")?;
+        *guard = Some(ActiveBuild {
+            tag: opts.tag.trim().to_string(),
+            status: BuildStatus::Running,
+            exit_code: None,
+            cancel_requested: false,
+            buffer: OutputBuffer::default(),
+            child: Some(child),
+        });
+    }
+
+    let out_reader = spawn_reader(app.clone(), "stdout", stdout);
+    let err_reader = spawn_reader(app.clone(), "stderr", stderr);
+    let waiter = app.clone();
+    std::thread::spawn(move || {
+        // Both pipes close when the process exits, whether it finished or was
+        // killed, so joining the readers is how this thread learns it is over.
+        let _ = out_reader.join();
+        let _ = err_reader.join();
+        finish(&waiter);
+    });
+
+    Ok(())
+}
+
+/// Long enough for any real build diagnostic, short enough that one runaway
+/// `RUN` step cannot hand the log pane a multi-megabyte line.
+const MAX_LINE_BYTES: u64 = 64 * 1024;
+
+/// Appended to a line that hit the cap, so the pane never shows a sliced line
+/// as though that were all the build printed.
+const TRUNCATION_MARKER: &str = " [line truncated]";
+
+/// Read one line, keeping at most `MAX_LINE_BYTES` of it. `None` means this
+/// pipe has nothing more to give: end of stream, or a read error on a pipe the
+/// child is no longer writing to.
+///
+/// `MAX_LINES` bounds how many lines are kept, not how big one can be, and
+/// `--progress plain` passes `RUN` output through verbatim. Without the cap a
+/// single step that cats a large file allocates that whole blob here, clones it
+/// into the ring buffer and clones it again into the event payload.
+fn read_capped_line<R: BufRead>(reader: &mut R) -> Option<String> {
+    let mut buf = Vec::new();
+    let read = reader
+        .by_ref()
+        .take(MAX_LINE_BYTES)
+        .read_until(b'\n', &mut buf)
+        .ok()?;
+    if read == 0 {
+        return None;
+    }
+    let truncated = read as u64 == MAX_LINE_BYTES && buf.last() != Some(&b'\n');
+    if truncated {
+        skip_rest_of_line(reader);
+    }
+    if buf.last() == Some(&b'\n') {
+        buf.pop();
+        if buf.last() == Some(&b'\r') {
+            buf.pop();
+        }
+    }
+    // Build output is whatever the RUN steps happen to print, so a stray byte
+    // that is not valid UTF-8 is ordinary. Refusing the line would end the
+    // drain, and a pipe that stops emptying leaves the child blocked on its
+    // next write with the build stuck at Running forever. One replacement
+    // character is the cheaper outcome.
+    let mut text = String::from_utf8_lossy(&buf).into_owned();
+    if truncated {
+        text.push_str(TRUNCATION_MARKER);
+    }
+    Some(text)
+}
+
+/// Throw away the tail of an over-long line, still a bounded chunk at a time.
+/// The bytes are not wanted but they do have to be read: leaving them in the
+/// pipe is the same stall as not reading it at all.
+fn skip_rest_of_line<R: BufRead>(reader: &mut R) {
+    loop {
+        let mut discard = Vec::new();
+        match reader
+            .by_ref()
+            .take(MAX_LINE_BYTES)
+            .read_until(b'\n', &mut discard)
+        {
+            // End of stream, or a pipe that will not read again.
+            Ok(0) | Err(_) => return,
+            // Reached the newline; the next line starts clean.
+            Ok(_) if discard.last() == Some(&b'\n') => return,
+            Ok(_) => {}
+        }
+    }
+}
+
+fn spawn_reader<R: Read + Send + 'static>(
+    app: AppHandle,
+    stream: &'static str,
+    source: R,
+) -> std::thread::JoinHandle<()> {
+    std::thread::spawn(move || {
+        let mut reader = BufReader::new(source);
+        while let Some(text) = read_capped_line(&mut reader) {
+            let manager = app.state::<BuildManager>();
+            let entry = {
+                let Ok(mut guard) = manager.0.lock() else {
+                    break;
+                };
+                match guard.as_mut() {
+                    Some(active) => active.buffer.push(stream, text),
+                    None => break,
+                }
+            };
+            let _ = app.emit(BUILD_OUTPUT_EVENT, &entry);
+        }
+    })
+}
+
+fn finish(app: &AppHandle) {
+    let manager = app.state::<BuildManager>();
+    let done = {
+        let Ok(mut guard) = manager.0.lock() else {
+            return;
+        };
+        let Some(active) = guard.as_mut() else {
+            return;
+        };
+        // The pipes are already closed, so this returns without blocking.
+        let code = active
+            .child
+            .take()
+            .and_then(|mut c| c.wait().ok())
+            .and_then(|status| status.code());
+        active.exit_code = code;
+        active.status = final_status(active.cancel_requested, code);
+        BuildDone {
+            status: active.status,
+            tag: active.tag.clone(),
+            exit_code: code,
+        }
+    };
+    let _ = app.emit(BUILD_DONE_EVENT, &done);
+}
+
+#[tauri::command]
+pub fn cancel_build(app: AppHandle) -> Result<(), String> {
+    let manager = app.state::<BuildManager>();
+    let mut guard = manager.0.lock().map_err(|_| "Build state is poisoned.")?;
+    let Some(active) = guard.as_mut() else {
+        return Err("No build is running.".to_string());
+    };
+    if active.status != BuildStatus::Running {
+        return Err("No build is running.".to_string());
+    }
+    active.cancel_requested = true;
+    if let Some(child) = active.child.as_mut() {
+        child
+            .kill()
+            .map_err(|e| format!("Could not stop the build: {e}"))?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn get_build_state(app: AppHandle) -> Result<BuildStateDto, String> {
+    let manager = app.state::<BuildManager>();
+    let guard = manager.0.lock().map_err(|_| "Build state is poisoned.")?;
+    Ok(match guard.as_ref() {
+        Some(active) => BuildStateDto {
+            status: active.status,
+            tag: active.tag.clone(),
+            exit_code: active.exit_code,
+            lines: active.buffer.snapshot(),
+            next_seq: active.buffer.next_seq(),
+            dropped: active.buffer.dropped(),
+        },
+        None => BuildStateDto {
+            status: BuildStatus::Idle,
+            tag: String::new(),
+            exit_code: None,
+            lines: Vec::new(),
+            next_seq: 0,
+            dropped: 0,
+        },
+    })
 }
 
 #[cfg(test)]

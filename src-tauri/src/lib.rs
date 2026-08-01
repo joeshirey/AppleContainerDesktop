@@ -4,6 +4,7 @@ pub mod cli;
 pub mod containers;
 pub mod recreate;
 
+use build::BuildManager;
 use containers::*;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -11,6 +12,7 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_store::Builder::default().build())
+        .manage(BuildManager::default())
         .invoke_handler(tauri::generate_handler![
             list_containers,
             start_container,
@@ -49,6 +51,9 @@ pub fn run() {
             prune_networks,
             search_hub,
             get_hub_tags,
+            build::start_build,
+            build::cancel_build,
+            build::get_build_state,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
