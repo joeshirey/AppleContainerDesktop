@@ -1,8 +1,9 @@
 //! Running a build and holding its state while it runs.
 //!
 //! This is the only place in the app with a live child process. The pieces
-//! worth testing on their own, the ring buffer and the exit-status decision,
-//! are plain values with no process behind them.
+//! worth testing on their own do not need one: the ring buffer and the
+//! exit-status decision are plain values, and the line reader takes any
+//! `BufRead`, so a slice of bytes drives every boundary it has.
 
 use crate::build_args::{self, BuildOptions};
 use crate::cli;
@@ -287,6 +288,12 @@ fn abandon(manager: &BuildManager) {
         return;
     };
     if let Some(mut child) = guard.take().and_then(|mut active| active.child.take()) {
+        // This waits with the lock held, which `finish` goes out of its way not
+        // to do. What makes it safe is that the signal is SIGKILL: a reader
+        // that started may be queued on this very lock with a line to push, and
+        // the child may be blocked writing to a pipe nobody is draining, so the
+        // only thing breaking the cycle is that the child cannot refuse to die.
+        // Soften this to SIGTERM and the window freezes with the lock held.
         let _ = child.kill();
         let _ = child.wait();
     }
@@ -404,11 +411,13 @@ fn spawn_reader<R: Read + Send + 'static>(
                             build_id: active.build_id,
                             line: active.buffer.push(stream, text),
                         },
-                        // Unreachable: nothing puts the state back to None
-                        // while a build has readers attached. If that ever
-                        // changes, breaking here stops draining the pipe and
-                        // hangs the child on its next write — the failure the
-                        // capped reader exists to avoid.
+                        // Reached when `abandon` clears a build whose threads
+                        // could not all start, with this reader already
+                        // attached. Breaking is right there, because the child
+                        // is being killed anyway — but it is the one exit that
+                        // stops draining a live pipe, which hangs the child on
+                        // its next write. Anything else that starts clearing
+                        // the state has to kill the child too.
                         None => break,
                     }
                 };
@@ -602,5 +611,105 @@ mod tests {
     #[test]
     fn a_build_that_finished_before_the_cancel_landed_still_succeeded() {
         assert_eq!(final_status(true, Some(0)), BuildStatus::Succeeded);
+    }
+
+    const CAP: usize = MAX_LINE_BYTES as usize;
+
+    /// Read a whole stream the way a reader thread does, so the tests see the
+    /// same lines the pane would.
+    fn drain(bytes: &[u8]) -> Vec<String> {
+        let mut reader = BufReader::new(bytes);
+        let mut lines = Vec::new();
+        while let Some(line) = read_capped_line(&mut reader) {
+            lines.push(line);
+        }
+        lines
+    }
+
+    fn line_of(len: usize, tail: &[u8]) -> Vec<u8> {
+        let mut input = vec![b'a'; len];
+        input.extend_from_slice(tail);
+        input
+    }
+
+    // A line that fills the cap exactly puts its newline just out of reach, so
+    // the reader cannot tell it is complete until the skip comes back empty.
+    // Get this wrong and a whole line reaches the pane labelled truncated,
+    // sending the user to look for output that was never cut.
+    #[test]
+    fn a_line_of_exactly_the_cap_is_not_marked_truncated() {
+        let lines = drain(&line_of(CAP, b"\nnext\n"));
+        assert_eq!(lines[0].len(), CAP);
+        assert!(!lines[0].ends_with(TRUNCATION_MARKER));
+        assert_eq!(lines[1], "next");
+    }
+
+    // Same line, CRLF ending: the skip discards the `\r`, which is delimiter
+    // rather than content, so it is not evidence that anything was lost.
+    #[test]
+    fn a_line_of_exactly_the_cap_ending_in_crlf_is_not_marked_truncated() {
+        let lines = drain(&line_of(CAP, b"\r\nnext\n"));
+        assert_eq!(lines[0].len(), CAP);
+        assert!(!lines[0].ends_with(TRUNCATION_MARKER));
+        assert_eq!(lines[1], "next");
+    }
+
+    // Here the `\r` lands inside the cap and the `\n` past it. The line is
+    // complete, so it must arrive unmarked, and the carriage return has to go
+    // with the newline that was consumed for it — a CR left on the end renders
+    // as a stray control character in the pane.
+    #[test]
+    fn a_carriage_return_sitting_on_the_cap_boundary_is_stripped() {
+        let lines = drain(&line_of(CAP - 1, b"\r\nnext\n"));
+        assert_eq!(lines[0].len(), CAP - 1);
+        assert!(!lines[0].ends_with('\r'));
+        assert!(!lines[0].ends_with(TRUNCATION_MARKER));
+        assert_eq!(lines[1], "next");
+    }
+
+    // One byte of real content past the cap is a genuine loss. Presenting a cut
+    // line as complete is the mirror of the case above: the user reads a
+    // half-finished diagnostic as the whole of what the build said.
+    #[test]
+    fn a_line_one_byte_past_the_cap_is_marked_truncated() {
+        let lines = drain(&line_of(CAP + 1, b"\nnext\n"));
+        assert!(lines[0].ends_with(TRUNCATION_MARKER));
+        assert_eq!(lines[1], "next");
+    }
+
+    // `MAX_LINES` bounds how many lines are kept, not how big one is, and
+    // `--progress plain` passes RUN output through verbatim. The tail has to be
+    // discarded rather than skipped over, or the rest of the build lands
+    // mid-line and the transcript never recovers.
+    #[test]
+    fn a_runaway_line_is_capped_and_the_next_line_survives_intact() {
+        let lines = drain(&line_of(4 * CAP + 137, b"\nnext\n"));
+        assert_eq!(lines.len(), 2);
+        assert_eq!(lines[0].len(), CAP + TRUNCATION_MARKER.len());
+        assert_eq!(lines[1], "next");
+    }
+
+    // A build that dies mid-line still said something worth showing.
+    #[test]
+    fn a_final_line_with_no_newline_is_still_delivered() {
+        assert_eq!(drain(b"one\ntwo"), vec!["one", "two"]);
+    }
+
+    // `--progress plain` should not redraw, but a RUN step's own output can,
+    // and a carriage return at the end of the last line is the tail of one.
+    // Unlike `lines()`, the reader drops it whether or not a newline followed.
+    #[test]
+    fn a_trailing_carriage_return_is_stripped_from_an_unterminated_line() {
+        assert_eq!(drain(b"done\r"), vec!["done"]);
+    }
+
+    // The reason this reader exists instead of `lines()`, which yields an error
+    // for a line that is not valid UTF-8. Ending the drain there stops emptying
+    // the pipe, and a build that prints one stray byte — a compiler diagnostic
+    // is enough — hangs on its next write with the status stuck at Running.
+    #[test]
+    fn invalid_utf8_is_replaced_and_the_drain_carries_on() {
+        let lines = drain(&[b'a', 0xff, b'b', b'\n', b'c', b'\n']);
+        assert_eq!(lines, vec!["a\u{fffd}b", "c"]);
     }
 }
