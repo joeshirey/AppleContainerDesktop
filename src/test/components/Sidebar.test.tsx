@@ -6,6 +6,7 @@ describe("Sidebar", () => {
     render(<Sidebar active="containers" onSelect={() => {}} />);
     expect(screen.getByText("Containers")).toBeInTheDocument();
     expect(screen.getByText("Images")).toBeInTheDocument();
+    expect(screen.getByText("Builder")).toBeInTheDocument();
     expect(screen.getByText("Hub Search")).toBeInTheDocument();
     expect(screen.getByText("Machines")).toBeInTheDocument();
     expect(screen.getByText("Settings")).toBeInTheDocument();

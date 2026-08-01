@@ -1,0 +1,15 @@
+.root { padding: 24px; display: flex; flex-direction: column; gap: 14px; }
+.title { font-size: 1.1rem; font-weight: 600; color: var(--fg); margin: 0; }
+.desc { font-size: 0.82rem; color: var(--gray); max-width: 60ch; }
+.card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 12px; max-width: 520px; }
+.statusRow { display: flex; align-items: center; gap: 10px; }
+.status { font-size: 0.9rem; font-weight: 600; color: var(--fg); }
+.alloc { font-size: 0.78rem; color: var(--gray); }
+.raw { font-size: 0.75rem; color: var(--gray); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.label { font-size: 0.75rem; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: 0.05em; }
+.input { height: 32px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font-size: 0.85rem; color: var(--fg); }
+.actions { display: flex; gap: 8px; }
+.btn { height: 32px; padding: 0 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; font-size: 0.78rem; cursor: pointer; color: var(--fg); }
+.btnDanger { height: 32px; padding: 0 14px; background: var(--bg); border: 1px solid var(--red-tint-border); border-radius: 7px; font-size: 0.78rem; cursor: pointer; color: var(--red); }
+.error { font-size: 0.78rem; color: var(--red); padding: 6px 10px; background: var(--red-tint-bg); border: 1px solid var(--red-tint-border); border-radius: 6px; max-width: 520px; }

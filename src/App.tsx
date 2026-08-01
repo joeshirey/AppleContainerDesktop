@@ -3,19 +3,22 @@ import { Sidebar }       from "./components/Sidebar";
 import { SystemBanner }  from "./components/SystemBanner";
 import { ContainersView } from "./views/ContainersView";
 import { ImagesView }    from "./views/ImagesView";
+import { BuilderView }   from "./views/BuilderView";
 import { HubSearchView } from "./views/HubSearchView";
 import { MachinesView }  from "./views/MachinesView";
 import { VolumesView }   from "./views/VolumesView";
 import { NetworksView }  from "./views/NetworksView";
 import { SettingsView }  from "./views/SettingsView";
+import { BuildProvider } from "./hooks/useBuild";
 import { checkSystemStatus, startSystem, stopSystem } from "./api";
 import type { NavSection } from "./types";
 import styles from "./App.module.css";
 
-function ActiveView({ section }: { section: NavSection }) {
+function ActiveView({ section }: { section: NavSection }): React.ReactElement {
   switch (section) {
     case "containers": return <ContainersView />;
     case "images":     return <ImagesView />;
+    case "builder":    return <BuilderView />;
     case "hub":        return <HubSearchView />;
     case "machines":   return <MachinesView />;
     case "volumes":    return <VolumesView />;
@@ -64,17 +67,19 @@ export default function App() {
   }
 
   return (
-    <div className={styles.app}>
-      <Sidebar active={active} onSelect={setActive} />
-      <div className={styles.body}>
-        <SystemBanner
-          running={sysRunning}
-          error={sysError}
-          onStart={handleStart}
-          onStop={handleStop}
-        />
-        <main className={styles.main}><ActiveView section={active} /></main>
+    <BuildProvider>
+      <div className={styles.app}>
+        <Sidebar active={active} onSelect={setActive} />
+        <div className={styles.body}>
+          <SystemBanner
+            running={sysRunning}
+            error={sysError}
+            onStart={handleStart}
+            onStop={handleStop}
+          />
+          <main className={styles.main}><ActiveView section={active} /></main>
+        </div>
       </div>
-    </div>
+    </BuildProvider>
   );
 }

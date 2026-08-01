@@ -4,6 +4,7 @@ import styles from "./Sidebar.module.css";
 const ITEMS: { key: NavSection; label: string }[] = [
   { key: "containers", label: "Containers" },
   { key: "images",     label: "Images" },
+  { key: "builder",   label: "Builder" },
   { key: "hub",        label: "Hub Search" },
   { key: "machines",   label: "Machines" },
   { key: "volumes",    label: "Volumes" },
