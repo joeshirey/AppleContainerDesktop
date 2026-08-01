@@ -1,3 +1,4 @@
+pub mod build;
 pub mod build_args;
 pub mod cli;
 pub mod containers;
