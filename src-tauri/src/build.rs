@@ -37,13 +37,15 @@ pub enum BuildStatus {
     Cancelled,
 }
 
-/// A kill makes the process exit non-zero, so a cancel that was asked for has
-/// to outrank the code the child reports.
+/// A kill makes the process exit non-zero, so a cancel that was asked for
+/// outranks the code the child reports — with one exception. A signalled
+/// process has no exit code at all, so a clean zero means the build finished
+/// on its own and the image exists, whatever the user asked for meanwhile.
 pub fn final_status(cancel_requested: bool, exit_code: Option<i32>) -> BuildStatus {
-    if cancel_requested {
-        BuildStatus::Cancelled
-    } else if exit_code == Some(0) {
+    if exit_code == Some(0) {
         BuildStatus::Succeeded
+    } else if cancel_requested {
+        BuildStatus::Cancelled
     } else {
         BuildStatus::Failed
     }
@@ -320,12 +322,15 @@ pub fn cancel_build(app: AppHandle) -> Result<(), String> {
     if active.status != BuildStatus::Running {
         return Err("No build is running.".to_string());
     }
-    active.cancel_requested = true;
     if let Some(child) = active.child.as_mut() {
         child
             .kill()
             .map_err(|e| format!("Could not stop the build: {e}"))?;
     }
+    // Recorded only once the signal is away. Setting it first and then failing
+    // the kill reports the build as cancelled to the user who was just told it
+    // could not be stopped, while it runs on to completion.
+    active.cancel_requested = true;
     Ok(())
 }
 
@@ -416,5 +421,16 @@ mod tests {
     fn a_requested_cancel_outranks_the_exit_code() {
         assert_eq!(final_status(true, Some(1)), BuildStatus::Cancelled);
         assert_eq!(final_status(true, None), BuildStatus::Cancelled);
+    }
+
+    // Cancel and success are not exclusive: the build can finish while the
+    // cancel is still in flight, and killing a process that has exited but not
+    // been reaped still succeeds. A kill leaves no exit code at all, so a clean
+    // zero here can only mean the build completed. Reporting that as Cancelled
+    // tells the user nothing was built while the tagged image sits in
+    // `image ls`, so they never go looking for it.
+    #[test]
+    fn a_build_that_finished_before_the_cancel_landed_still_succeeded() {
+        assert_eq!(final_status(true, Some(0)), BuildStatus::Succeeded);
     }
 }
