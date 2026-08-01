@@ -7,8 +7,10 @@
 use serde::Serialize;
 use std::collections::VecDeque;
 
-/// Enough to read a long build back, small enough to bound memory on one that
-/// prints without restraint.
+/// How many lines the ring buffer retains before it starts evicting the oldest.
+/// This bounds the number of lines held, not their total byte size — a single
+/// line can be arbitrarily long, so memory is bounded by the reader in Task 4,
+/// not here.
 pub const MAX_LINES: usize = 5000;
 
 #[derive(Debug, Clone, Serialize)]
@@ -66,14 +68,24 @@ impl OutputBuffer {
         entry
     }
 
+    /// The full transcript the frontend replays when the build pane opens or
+    /// reconnects. The dedupe contract requires that all three accessors are
+    /// read under a single lock acquisition: fetching snapshot and next_seq
+    /// separately can produce a snapshot ending at seq 100 alongside a
+    /// next_seq of 105, causing the frontend to silently discard events
+    /// 100–104 as already covered.
     pub fn snapshot(&self) -> Vec<BuildLine> {
         self.lines.iter().cloned().collect()
     }
 
+    /// The seq that will be assigned to the next line pushed. The frontend
+    /// uses this as its dedupe boundary: events with seq >= next_seq are new.
     pub fn next_seq(&self) -> u64 {
         self.next_seq
     }
 
+    /// How many lines were evicted from the front of the buffer. Drives the
+    /// "N earlier lines not shown" banner in the build pane.
     pub fn dropped(&self) -> u64 {
         self.dropped
     }
