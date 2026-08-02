@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act as reactAct, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { ImagesView } from "../../views/ImagesView";
 
@@ -186,6 +186,90 @@ describe("ImagesView", () => {
     mockBuild = { buildId: 1, status: "succeeded", tag: "myrepo/built:v1", exitCode: 0, lines: [], nextSeq: 0, dropped: 0 } as any;
     rerender(<ImagesView />);
     await screen.findByText("myrepo/built");
+  });
+
+  // M5: the build-success effect must not fire for non-succeeded statuses.
+  // If the status guard is removed the effect fires on every mount regardless
+  // of status, causing an extra listImages call.
+  it("does not call listImages more than once on idle mount", async () => {
+    let callCount = 0;
+    mockList.mockImplementation(() => { callCount++; return Promise.resolve([]); });
+    render(<ImagesView />);
+    await screen.findByText("No images found.");
+    expect(callCount).toBe(1);
+  });
+
+  // M7: build.status must be in the effect dependency array. If it is omitted,
+  // a build that transitions running → succeeded with the same buildId never
+  // triggers a refresh because buildId did not change.
+  it("refreshes the list when status changes from running to succeeded (same buildId)", async () => {
+    mockBuild = { buildId: 1, status: "running", tag: "myapp:v1", exitCode: null, lines: [], nextSeq: 0, dropped: 0 } as any;
+    mockList.mockResolvedValue([]);
+    const { rerender } = render(<ImagesView />);
+    await screen.findByText("No images found.");
+    mockList.mockResolvedValue([
+      { id: "sha256:new", reference: "myapp:v1", repository: "myapp", tag: "v1", size: "10 MB", created: "2026-01-02T00:00:00Z" },
+    ]);
+    mockBuild = { buildId: 1, status: "succeeded", tag: "myapp:v1", exitCode: 0, lines: [], nextSeq: 0, dropped: 0 } as any;
+    rerender(<ImagesView />);
+    await screen.findByText("myapp");
+  });
+
+  // M13: the token check before setImages must be present. Without it, a stale
+  // mount response that arrives after the build-success refresh has landed would
+  // overwrite the new image data with the pre-build list.
+  it("ignores a stale listImages response superseded by the build-success refresh", async () => {
+    let resolveMount!: (imgs: any[]) => void;
+    let callCount = 0;
+    mockList.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        // Mount's request is intentionally slow.
+        return new Promise<any[]>(r => { resolveMount = r; });
+      }
+      // Build-success refresh resolves quickly with the newly-built image.
+      return Promise.resolve([
+        { id: "sha256:new", reference: "myapp:v1", repository: "myapp", tag: "v1", size: "10 MB", created: "2026-01-02T00:00:00Z" },
+      ]);
+    });
+    const { rerender } = render(<ImagesView />);
+    // Mount's fetch is pending — loading indicator still showing.
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    // Build succeeds while the mount fetch is still in flight.
+    mockBuild = { buildId: 1, status: "succeeded", tag: "myapp:v1", exitCode: 0, lines: [], nextSeq: 0, dropped: 0 } as any;
+    rerender(<ImagesView />);
+    // Fast build-success refresh resolves — myapp appears.
+    await screen.findByText("myapp");
+    // Stale mount response arrives carrying the old pre-build list. Must be
+    // ignored: myapp must remain visible.
+    await reactAct(async () => { resolveMount(IMAGES); });
+    expect(screen.getByText("myapp")).toBeInTheDocument();
+    expect(screen.queryByText("nginx")).not.toBeInTheDocument();
+  });
+
+  // M14: the token check before setError must be present. Without it, a stale
+  // mount rejection that arrives after a successful refresh would push a
+  // misleading error banner onto the updated view.
+  it("ignores a stale listImages rejection superseded by the build-success refresh", async () => {
+    let rejectMount!: (e: Error) => void;
+    let callCount = 0;
+    mockList.mockImplementation(() => {
+      callCount++;
+      if (callCount === 1) {
+        // Mount's request will reject late.
+        return new Promise<any[]>((_, reject) => { rejectMount = reject; });
+      }
+      return Promise.resolve([
+        { id: "sha256:new", reference: "myapp:v1", repository: "myapp", tag: "v1", size: "10 MB", created: "2026-01-02T00:00:00Z" },
+      ]);
+    });
+    const { rerender } = render(<ImagesView />);
+    mockBuild = { buildId: 1, status: "succeeded", tag: "myapp:v1", exitCode: 0, lines: [], nextSeq: 0, dropped: 0 } as any;
+    rerender(<ImagesView />);
+    await screen.findByText("myapp");
+    // Stale mount request rejects — must not push an error banner.
+    await reactAct(async () => { rejectMount(new Error("network down")); });
+    expect(screen.queryByText("network down")).not.toBeInTheDocument();
   });
 
   // I3 + buildId dep: two consecutive builds both succeed. The second must
