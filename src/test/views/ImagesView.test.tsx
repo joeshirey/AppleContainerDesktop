@@ -159,6 +159,20 @@ describe("ImagesView", () => {
     },
   );
 
+  // I2: when the view mounts while the session-latched status is already
+  // "succeeded", the build-success effect must not fire a second listImages
+  // call on top of the mount fetch. refreshedFor is seeded from build.buildId
+  // at construction time exactly to prevent this.
+  it("does not double-fetch on mount when last build already succeeded", async () => {
+    mockBuild = { buildId: 5, status: "succeeded", tag: "old:v1", exitCode: 0, lines: [], nextSeq: 0, dropped: 0 } as any;
+    mockList.mockResolvedValue([]);
+    render(<ImagesView />);
+    await screen.findByText("No images found.");
+    // Allow any pending microtasks to flush, then check the count.
+    await waitFor(() => expect(mockList).toHaveBeenCalled());
+    expect(mockList).toHaveBeenCalledTimes(1);
+  });
+
   // I3: assert the new image appears in the DOM, not just that listImages was
   // called. A bare call that discards the result would otherwise leave the
   // tests green.
