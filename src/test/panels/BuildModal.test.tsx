@@ -312,6 +312,18 @@ describe("BuildModal", () => {
     expect(builderStart).toHaveBeenCalled();
   });
 
+  // B4: handleStartBuilder must pass positiveInt(cpus), not Number(cpus). A
+  // blank CPUs field should reach builderStart as undefined. Number("") is 0
+  // which would silently request a zero-CPU builder.
+  it("passes undefined for cpus when Start Builder is clicked with a blank CPUs field", async () => {
+    vi.mocked(builderStatus).mockResolvedValue(BUILDER_DOWN);
+    render(<BuildModal onClose={vi.fn()} />);
+    await screen.findByRole("button", { name: "Start Builder" });
+    // CPUs left blank — must reach builderStart as undefined, not 0.
+    await userEvent.click(screen.getByRole("button", { name: "Start Builder" }));
+    await waitFor(() => expect(builderStart).toHaveBeenCalledWith(undefined, undefined));
+  });
+
   it("does not let Start Builder be pressed twice", async () => {
     vi.mocked(builderStatus).mockResolvedValue(BUILDER_DOWN);
     let release = () => {};

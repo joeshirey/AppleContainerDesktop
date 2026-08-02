@@ -14,7 +14,15 @@ export function BuilderView() {
   const [cpus, setCpus] = useState("");
   const [memory, setMemory] = useState("");
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // CLI-level error: set by refresh's catch path or by an action's catch.
+  // Cleared by act() at the start of every action, and by refresh's success
+  // path when keepError is false (the default).
   const [error, setError] = useState<string | null>(null);
+  // Client-side validation error for the CPUs field. Lives independently from
+  // `error` so that a status refresh landing mid-validation cannot wipe the
+  // message while the user's invalid value is still in the box.
+  // Cleared when the user edits the field or when an action starts.
+  const [cpuError, setCpuError] = useState<string | null>(null);
   const [acting, setActing] = useState(false);
   const tokenRef = useRef(0);
 
@@ -31,7 +39,10 @@ export function BuilderView() {
       if (!keepError) setError(null);
     } catch (e) {
       if (token !== tokenRef.current) return;
-      setError(message(e));
+      // Honour the flag in the catch path too: if the caller has already set
+      // an action error and wants it preserved, a failing follow-up status
+      // check must not overwrite it with a potentially unrelated network error.
+      if (!keepError) setError(message(e));
     }
   }, []);
 
@@ -46,6 +57,7 @@ export function BuilderView() {
     // Clear any leftover error before the new action so the banner does not
     // persist during a retry.
     setError(null);
+    setCpuError(null);
     setActing(true);
     try {
       await action();
@@ -64,7 +76,10 @@ export function BuilderView() {
 
   function handleStart() {
     if (cpus.trim() !== "" && positiveInt(cpus) === undefined) {
-      setError(CPUS_INVALID);
+      // Validation error lives in its own slot so that the status refresh
+      // landing later cannot wipe it while the invalid value is still in the
+      // CPUs box.
+      setCpuError(CPUS_INVALID);
       return;
     }
     // Don't await — the return value of event handlers is ignored by React,
@@ -91,6 +106,10 @@ export function BuilderView() {
   // Only when the CLI said something this build does not have a label for.
   const unrecognised = state !== null && state.raw !== "" && state.raw !== "running" && state.raw !== "stopped";
 
+  // Validation messages take priority over CLI errors; both render through the
+  // same banner so the user never sees two red boxes at once.
+  const banner = cpuError ?? error;
+
   return (
     <div className={styles.root}>
       <h1 className={styles.title}>Builder</h1>
@@ -98,7 +117,7 @@ export function BuilderView() {
         Image builds run inside a dedicated container. It starts on demand and
         keeps its CPU and memory until you stop it.
       </p>
-      {error && <div className={styles.error}>{error}</div>}
+      {banner && <div className={styles.error}>{banner}</div>}
       <div className={styles.card}>
         <div className={styles.statusRow}>
           <StatusDot status={running ? "running" : "stopped"} />
@@ -118,7 +137,7 @@ export function BuilderView() {
                 step={1}
                 placeholder="e.g. 4"
                 value={cpus}
-                onChange={e => setCpus(e.target.value)}
+                onChange={e => { setCpus(e.target.value); setCpuError(null); }}
                 disabled={acting}
               />
             </div>
