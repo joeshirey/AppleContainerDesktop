@@ -105,10 +105,14 @@ describe("ImagesView", () => {
     await waitFor(() => expect(mockRemove).toHaveBeenCalledWith("docker.io/library/nginx:latest"));
   });
 
+  // N6: assert the modal is absent before the click so initialising showBuild
+  // to true cannot survive undetected.
   it("opens the build modal", async () => {
     mockList.mockResolvedValue([]);
     render(<ImagesView />);
-    await userEvent.click(await screen.findByRole("button", { name: "Build Image…" }));
+    const btn = await screen.findByRole("button", { name: "Build Image…" });
+    expect(screen.queryByTestId("build-modal")).not.toBeInTheDocument();
+    await userEvent.click(btn);
     expect(screen.getByTestId("build-modal")).toBeInTheDocument();
   });
 
@@ -121,45 +125,77 @@ describe("ImagesView", () => {
     expect(screen.queryByTestId("build-modal")).not.toBeInTheDocument();
   });
 
+  // N1+N2: use a distinctive tag and match the full accessible name with the
+  // updated label ("View output", not "click to view output").
   // The point of letting a build detach is being able to get back to it.
   it("shows a strip while a build is in flight and reopens the modal", async () => {
-    mockBuild = { ...mockBuild, status: "running", tag: "app:latest" } as any;
+    mockBuild = { ...mockBuild, status: "running", tag: "myrepo/myapp:rc1" } as any;
     mockList.mockResolvedValue([]);
     render(<ImagesView />);
-    await userEvent.click(await screen.findByRole("button", { name: /Building app:latest/ }));
+    await userEvent.click(await screen.findByRole("button", { name: "Building myrepo/myapp:rc1… View output" }));
     expect(screen.getByTestId("build-modal")).toBeInTheDocument();
   });
 
-  it("hides the strip when no build is running", async () => {
+  // N3: a build-output event can arrive before the modal's snapshot resolves,
+  // leaving build.tag as "" for a short window. Render "image" as fallback.
+  it("shows 'image' when the strip renders before the tag is known", async () => {
+    mockBuild = { ...mockBuild, status: "running", tag: "" } as any;
     mockList.mockResolvedValue([]);
     render(<ImagesView />);
-    await screen.findByText("No images found.");
-    expect(screen.queryByRole("button", { name: /Building/ })).not.toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Building image… View output" })).toBeInTheDocument();
   });
 
+  // I4: the strip must be absent for every non-running terminal status, not
+  // just idle. A latched "succeeded" would leave "Building…" on-screen for
+  // the rest of the session.
+  it.each(["idle", "succeeded", "failed", "cancelled"])(
+    "hides the strip when build status is %s",
+    async (status) => {
+      mockBuild = { ...mockBuild, status } as any;
+      mockList.mockResolvedValue([]);
+      render(<ImagesView />);
+      await screen.findByText("No images found.");
+      expect(screen.queryByRole("button", { name: /Building/ })).not.toBeInTheDocument();
+    },
+  );
+
+  // I3: assert the new image appears in the DOM, not just that listImages was
+  // called. A bare call that discards the result would otherwise leave the
+  // tests green.
   it("refreshes the list when a build succeeds", async () => {
     mockList.mockResolvedValue([]);
     const { rerender } = render(<ImagesView />);
-    await waitFor(() => expect(mockList).toHaveBeenCalledTimes(1));
-    mockBuild = { ...mockBuild, status: "succeeded", tag: "app:latest" } as any;
+    await screen.findByText("No images found.");
+    mockList.mockResolvedValue([
+      { id: "sha256:new", reference: "myrepo/built:v1", repository: "myrepo/built", tag: "v1", size: "10 MB", created: "2026-01-02T00:00:00Z" },
+    ]);
+    mockBuild = { buildId: 1, status: "succeeded", tag: "myrepo/built:v1", exitCode: 0, lines: [], nextSeq: 0, dropped: 0 } as any;
     rerender(<ImagesView />);
-    await waitFor(() => expect(mockList).toHaveBeenCalledTimes(2));
+    await screen.findByText("myrepo/built");
   });
 
-  // Each build's success is a distinct event keyed on buildId, not status.
-  // Two consecutive succeeded builds must each trigger a refresh even though
-  // the status value is the same both times.
+  // I3 + buildId dep: two consecutive builds both succeed. The second must
+  // also refresh even though the status string does not change between them.
+  // The new image from the second build must appear in the DOM.
   it("refreshes once per build success, not once per status value", async () => {
     mockList.mockResolvedValue([]);
     const { rerender } = render(<ImagesView />);
-    await waitFor(() => expect(mockList).toHaveBeenCalledTimes(1));
-    // First build succeeds.
-    mockBuild = { buildId: 1, status: "succeeded", tag: "app:latest", exitCode: 0, lines: [], nextSeq: 0, dropped: 0 } as any;
+    await screen.findByText("No images found.");
+
+    // First build succeeds — its image appears.
+    mockList.mockResolvedValue([
+      { id: "sha256:b1", reference: "app:v1", repository: "app", tag: "v1", size: "10 MB", created: "2026-01-02T00:00:00Z" },
+    ]);
+    mockBuild = { buildId: 1, status: "succeeded", tag: "app:v1", exitCode: 0, lines: [], nextSeq: 0, dropped: 0 } as any;
     rerender(<ImagesView />);
-    await waitFor(() => expect(mockList).toHaveBeenCalledTimes(2));
-    // Second build also succeeds — status unchanged, buildId incremented.
-    mockBuild = { buildId: 2, status: "succeeded", tag: "app:v2", exitCode: 0, lines: [], nextSeq: 0, dropped: 0 } as any;
+    await screen.findByText("app");
+
+    // Second build succeeds — its distinct image must also appear.
+    mockList.mockResolvedValue([
+      { id: "sha256:b2", reference: "svc:v2", repository: "svc", tag: "v2", size: "12 MB", created: "2026-01-03T00:00:00Z" },
+    ]);
+    mockBuild = { buildId: 2, status: "succeeded", tag: "svc:v2", exitCode: 0, lines: [], nextSeq: 0, dropped: 0 } as any;
     rerender(<ImagesView />);
-    await waitFor(() => expect(mockList).toHaveBeenCalledTimes(3));
+    await screen.findByText("svc");
   });
 });
