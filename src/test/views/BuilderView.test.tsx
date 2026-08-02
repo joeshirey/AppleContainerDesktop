@@ -484,7 +484,21 @@ describe("BuilderView", () => {
     expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
   });
 
-  // The anchor for the two above: with no build in flight the buttons work as
+  // The confirm behind Delete carries the same guard. Nothing in the UI can
+  // open it and then start a build — leaving this view unmounts the confirm —
+  // so this is the only way to reach the state, and the guard is there for
+  // whoever next changes when Delete is offered.
+  it("will not confirm a delete while a build is running", async () => {
+    vi.mocked(builderStatus).mockResolvedValue(STOPPED);
+    const { rerender } = render(<BuilderView />);
+    await userEvent.click(await screen.findByRole("button", { name: "Delete" }));
+
+    mockBuild = buildingState;
+    rerender(<BuilderView />);
+    expect(screen.getByRole("button", { name: "Confirm Delete" })).toBeDisabled();
+  });
+
+  // The anchor for the three above: with no build in flight the buttons work as
   // they always did and the note stays out of the way.
   it("leaves Stop alone and says nothing when no build is running", async () => {
     vi.mocked(builderStatus).mockResolvedValue(RUNNING);

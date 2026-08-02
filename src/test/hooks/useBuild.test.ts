@@ -57,6 +57,10 @@ describe("appendLine", () => {
   it("drops a line from a build that has already been replaced", () => {
     const state = running([line(0, "current")], 1);
     expect(appendLine(state, event(0, "orphan", BUILD - 1))).toBe(state);
+    // A seq the current build has not reached, so only the id can reject it.
+    // At seq 0 the dedupe would have refused the line anyway and this test
+    // would hold with the id check deleted.
+    expect(appendLine(state, event(5, "orphan", BUILD - 1))).toBe(state);
   });
 
   // The two reader threads assign seq under the buffer lock and emit after
