@@ -192,6 +192,69 @@ describe("BuilderView", () => {
     expect(screen.queryByText(/whole number of 1 or more/i)).not.toBeInTheDocument();
   });
 
+  // Item 1: handleStart must call setError(null) in the validation path.
+  // Without it, a stale CLI error lurks under the validation message and
+  // resurfaces when the user later clears the CPUs field (which clears cpuError
+  // via onChange but leaves error untouched).
+  it("does not resurrect a stale CLI error when the CPUs validation is cleared", async () => {
+    vi.mocked(builderStatus).mockResolvedValue(STOPPED);
+    vi.mocked(builderStart).mockRejectedValue(new Error("insufficient memory"));
+    render(<BuilderView />);
+    await screen.findByText("Stopped");
+    // First Start fails → CLI error set.
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(await screen.findByText("insufficient memory")).toBeInTheDocument();
+    // Type invalid CPUs → validation error replaces CLI error; error cleared.
+    await userEvent.type(screen.getByLabelText("CPUs"), "0");
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(screen.getByText(/whole number of 1 or more/i)).toBeInTheDocument();
+    // Clearing the field removes the validation message. The stale CLI error
+    // must not reappear — clicking Start was a new attempt.
+    await userEvent.clear(screen.getByLabelText("CPUs"));
+    expect(screen.queryByText("insufficient memory")).not.toBeInTheDocument();
+    expect(screen.queryByText(/whole number of 1 or more/i)).not.toBeInTheDocument();
+  });
+
+  // Item 2: cpuError must be tied to the CPUs field's visibility. Once the
+  // builder is running the field unmounts; the banner must follow it.
+  it("hides the validation error when the builder starts running and the CPUs field unmounts", async () => {
+    let resolveStatus!: (s: BuilderState) => void;
+    vi.mocked(builderStatus).mockReturnValue(
+      new Promise<BuilderState>(r => { resolveStatus = r; }),
+    );
+    render(<BuilderView />);
+    // During "Checking…" the field is visible because running defaults false.
+    expect(await screen.findByText("Checking…")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("CPUs"), "0");
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(screen.getByText(/whole number of 1 or more/i)).toBeInTheDocument();
+    // Status resolves as Running → field unmounts; banner must clear.
+    await reactAct(async () => { resolveStatus(RUNNING); });
+    expect(screen.queryByText(/whole number of 1 or more/i)).not.toBeInTheDocument();
+  });
+
+  // C3: cpuError must win over error when both are set. The mount refresh can
+  // fail while cpuError is set (status lands after the validation branch runs),
+  // putting both slots in a non-null state simultaneously.
+  it("shows the validation error over a CLI error when both are set", async () => {
+    let rejectStatus!: (e: Error) => void;
+    vi.mocked(builderStatus).mockReturnValue(
+      new Promise<BuilderState>((_, reject) => { rejectStatus = reject; }),
+    );
+    render(<BuilderView />);
+    // During "Checking…" type invalid CPUs and click Start.
+    // handleStart calls setError(null) then sets cpuError.
+    expect(await screen.findByText("Checking…")).toBeInTheDocument();
+    await userEvent.type(screen.getByLabelText("CPUs"), "0");
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(screen.getByText(/whole number of 1 or more/i)).toBeInTheDocument();
+    // The pending mount refresh now rejects — both cpuError and error are set.
+    await reactAct(async () => { rejectStatus(new Error("status timeout")); });
+    // Validation message must win; the CLI error must not surface.
+    expect(screen.getByText(/whole number of 1 or more/i)).toBeInTheDocument();
+    expect(screen.queryByText("status timeout")).not.toBeInTheDocument();
+  });
+
   // M16 + M17: blank cpus must become undefined (not 0), blank memory must
   // become undefined (not ""), so the CLI uses its own defaults.
   it("passes undefined for both args when cpus and memory are blank", async () => {

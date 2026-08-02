@@ -36,6 +36,13 @@ export function BuilderView() {
       const s = await builderStatus();
       if (token !== tokenRef.current) return;
       setState(s);
+      // Currently unreachable as a difference-maker: act() always calls
+      // setError(null) before triggering a refresh, so error is already null
+      // by the time this line runs on any action's success path, and the mount
+      // refresh sees error=null at initialisation. The clear stays because the
+      // reachability argument depends on no second synchronous error producer
+      // existing — Finding A was exactly that scenario — and a future change
+      // could create another.
       if (!keepError) setError(null);
     } catch (e) {
       if (token !== tokenRef.current) return;
@@ -78,7 +85,10 @@ export function BuilderView() {
     if (cpus.trim() !== "" && positiveInt(cpus) === undefined) {
       // Validation error lives in its own slot so that the status refresh
       // landing later cannot wipe it while the invalid value is still in the
-      // CPUs box.
+      // CPUs box. Clear `error` too: clicking Start is a new attempt and the
+      // user should not see a stale CLI error resurface when they later clear
+      // the CPUs field (which clears cpuError via onChange but leaves error).
+      setError(null);
       setCpuError(CPUS_INVALID);
       return;
     }
@@ -107,8 +117,11 @@ export function BuilderView() {
   const unrecognised = state !== null && state.raw !== "" && state.raw !== "running" && state.raw !== "stopped";
 
   // Validation messages take priority over CLI errors; both render through the
-  // same banner so the user never sees two red boxes at once.
-  const banner = cpuError ?? error;
+  // same banner so the user never sees two red boxes at once. cpuError is only
+  // shown while the CPUs field is visible: once the builder is running the
+  // field unmounts and there is no longer a way for the user to correct it, so
+  // the message would be misleading noise.
+  const banner = (!running ? cpuError : null) ?? error;
 
   return (
     <div className={styles.root}>
