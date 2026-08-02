@@ -112,6 +112,15 @@ describe("ImagesView", () => {
     expect(screen.getByTestId("build-modal")).toBeInTheDocument();
   });
 
+  it("closes the build modal when onClose fires", async () => {
+    mockList.mockResolvedValue([]);
+    render(<ImagesView />);
+    await userEvent.click(await screen.findByRole("button", { name: "Build Image…" }));
+    expect(screen.getByTestId("build-modal")).toBeInTheDocument();
+    await userEvent.click(screen.getByText("close-build"));
+    expect(screen.queryByTestId("build-modal")).not.toBeInTheDocument();
+  });
+
   // The point of letting a build detach is being able to get back to it.
   it("shows a strip while a build is in flight and reopens the modal", async () => {
     mockBuild = { ...mockBuild, status: "running", tag: "app:latest" } as any;
@@ -135,5 +144,22 @@ describe("ImagesView", () => {
     mockBuild = { ...mockBuild, status: "succeeded", tag: "app:latest" } as any;
     rerender(<ImagesView />);
     await waitFor(() => expect(mockList).toHaveBeenCalledTimes(2));
+  });
+
+  // Each build's success is a distinct event keyed on buildId, not status.
+  // Two consecutive succeeded builds must each trigger a refresh even though
+  // the status value is the same both times.
+  it("refreshes once per build success, not once per status value", async () => {
+    mockList.mockResolvedValue([]);
+    const { rerender } = render(<ImagesView />);
+    await waitFor(() => expect(mockList).toHaveBeenCalledTimes(1));
+    // First build succeeds.
+    mockBuild = { buildId: 1, status: "succeeded", tag: "app:latest", exitCode: 0, lines: [], nextSeq: 0, dropped: 0 } as any;
+    rerender(<ImagesView />);
+    await waitFor(() => expect(mockList).toHaveBeenCalledTimes(2));
+    // Second build also succeeds — status unchanged, buildId incremented.
+    mockBuild = { buildId: 2, status: "succeeded", tag: "app:v2", exitCode: 0, lines: [], nextSeq: 0, dropped: 0 } as any;
+    rerender(<ImagesView />);
+    await waitFor(() => expect(mockList).toHaveBeenCalledTimes(3));
   });
 });
