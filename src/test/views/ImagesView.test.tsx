@@ -272,6 +272,27 @@ describe("ImagesView", () => {
     expect(screen.queryByText("network down")).not.toBeInTheDocument();
   });
 
+  // M15: the loading guard in the finally block. A superseded fetch must not
+  // clear the spinner while the fetch that replaced it is still outstanding —
+  // doing so shows "No images found." on a machine that has images.
+  it("keeps the spinner up when a superseded fetch settles first", async () => {
+    let resolveMount!: (v: any[]) => void;
+    let n = 0;
+    mockList.mockImplementation(() => {
+      n++;
+      if (n === 1) return new Promise<any[]>(r => { resolveMount = r; });
+      return new Promise<any[]>(() => {}); // build-success fetch stays in flight
+    });
+    const { rerender } = render(<ImagesView />);
+    mockBuild = { buildId: 1, status: "succeeded", tag: "app:v1", exitCode: 0, lines: [], nextSeq: 0, dropped: 0 } as any;
+    rerender(<ImagesView />);
+    // Stale mount fetch resolves — spinner must stay up because the
+    // build-success fetch is still outstanding.
+    await reactAct(async () => { resolveMount(IMAGES); });
+    expect(screen.getByText("Loading…")).toBeInTheDocument();
+    expect(screen.queryByText("No images found.")).not.toBeInTheDocument();
+  });
+
   // I3 + buildId dep: two consecutive builds both succeed. The second must
   // also refresh even though the status string does not change between them.
   // The new image from the second build must appear in the DOM.
