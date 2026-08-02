@@ -460,6 +460,62 @@ describe("BuildModal", () => {
     expect(await screen.findByText(/Built app:latest/)).toBeInTheDocument();
   });
 
+  // Build, close, reopen, mistype the context, Build again. `start_build`
+  // rejects before a build exists, so the status the outcome renders off is
+  // still the previous build's: a red "Build context not found" stacks over a
+  // green "Built app:latest." and the modal reports two contradictory things
+  // about the same click.
+  it("drops the last build's outcome while a start error is showing", async () => {
+    vi.mocked(startBuild).mockRejectedValue(new Error("Build context not found: /nope"));
+    mockState = { ...IDLE_BUILD, status: "succeeded", tag: "app:latest" };
+    render(<BuildModal onClose={vi.fn()} />);
+    expect(await screen.findByText(/Built app:latest/)).toBeInTheDocument();
+
+    await fillRequired();
+    await userEvent.click(screen.getByRole("button", { name: "Build" }));
+
+    expect(await screen.findByText("Build context not found: /nope")).toBeInTheDocument();
+    expect(screen.queryByText(/Built app:latest/)).not.toBeInTheDocument();
+  });
+
+  // The same collision on the other two outcomes, which render off the same
+  // persistent status.
+  it.each([
+    ["failed" as const, /exit code 1/i],
+    ["cancelled" as const, /Build cancelled/],
+  ])("drops a %s outcome under a start error too", async (status, banner) => {
+    vi.mocked(startBuild).mockRejectedValue(new Error("Build context not found: /nope"));
+    mockState = { ...IDLE_BUILD, status, tag: "app:latest", exitCode: 1 };
+    render(<BuildModal onClose={vi.fn()} />);
+    expect(await screen.findByText(banner)).toBeInTheDocument();
+
+    await fillRequired();
+    await userEvent.click(screen.getByRole("button", { name: "Build" }));
+
+    expect(await screen.findByText("Build context not found: /nope")).toBeInTheDocument();
+    expect(screen.queryByText(banner)).not.toBeInTheDocument();
+  });
+
+  // Suppressed, not discarded: the status effect clears `error` the moment the
+  // next build starts, and the outcome has to come back with it or a build
+  // that ends while the modal is open reports nothing at all.
+  it("puts the outcome back once the error clears", async () => {
+    vi.mocked(startBuild).mockRejectedValue(new Error("Build context not found: /nope"));
+    mockState = { ...IDLE_BUILD, status: "succeeded", tag: "app:latest" };
+    const { rerender } = render(<BuildModal onClose={vi.fn()} />);
+    await fillRequired();
+    await userEvent.click(screen.getByRole("button", { name: "Build" }));
+    expect(await screen.findByText("Build context not found: /nope")).toBeInTheDocument();
+
+    // The next build gets going, which is what clears the error.
+    mockState = { ...IDLE_BUILD, status: "running", tag: "app:2" };
+    rerender(<BuildModal onClose={vi.fn()} />);
+    mockState = { ...IDLE_BUILD, status: "succeeded", tag: "app:2" };
+    rerender(<BuildModal onClose={vi.fn()} />);
+
+    expect(await screen.findByText(/Built app:2/)).toBeInTheDocument();
+  });
+
   it("says how much earlier output was dropped", async () => {
     mockState = {
       ...IDLE_BUILD,

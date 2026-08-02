@@ -304,11 +304,25 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
         {build.dropped > 0 && (
           <div className={styles.notice}>Earlier output was dropped: {build.dropped} lines.</div>
         )}
-        {build.status === "failed" && (
-          <div className={styles.error}>Build failed with exit code {build.exitCode ?? "unknown"}.</div>
+        {/*
+          Held back while an error is showing, because the outcome renders off a
+          status that outlives the build it describes. Build, close, reopen,
+          mistype the context, Build again: `start_build` rejects before a build
+          exists, the status is still the last one's, and the modal reports both
+          a red "Build context not found" and a green "Built app:latest." for
+          the same click. Suppressing here rather than clearing on a new attempt
+          keeps one source of truth — the effect above already clears `error`
+          when the next build starts, which puts the outcome back on its own.
+        */}
+        {!error && (
+          <>
+            {build.status === "failed" && (
+              <div className={styles.error}>Build failed with exit code {build.exitCode ?? "unknown"}.</div>
+            )}
+            {build.status === "cancelled" && <div className={styles.notice}>Build cancelled.</div>}
+            {build.status === "succeeded" && <div className={styles.notice}>Built {build.tag}.</div>}
+          </>
         )}
-        {build.status === "cancelled" && <div className={styles.notice}>Build cancelled.</div>}
-        {build.status === "succeeded" && <div className={styles.notice}>Built {build.tag}.</div>}
 
         {/*
           Both streams render identically. `container build` writes its whole
