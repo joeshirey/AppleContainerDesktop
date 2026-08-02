@@ -400,15 +400,27 @@ describe("BuildModal", () => {
     expect(screen.queryByText(/builder is not running/i)).not.toBeInTheDocument();
   });
 
+  // The notice can surface mid-build: the builder went down under a build the
+  // modal has not seen fail yet. Starting a fresh one does not rescue that
+  // build, and the click boots a builder VM while the CLI still holds the dead
+  // one — minutes of work and an allocation the user did not ask for.
+  it("will not start a builder while a build is running", async () => {
+    vi.mocked(builderStatus).mockResolvedValue(BUILDER_DOWN);
+    mockState = { ...IDLE_BUILD, status: "running", tag: "app:latest" };
+    render(<BuildModal onClose={vi.fn()} />);
+    expect(await screen.findByRole("button", { name: "Start Builder" })).toBeDisabled();
+  });
+
   it("re-checks the builder when the build's status changes", async () => {
     mockState = { ...IDLE_BUILD, status: "running", tag: "app:latest" };
     const { rerender } = render(<BuildModal onClose={vi.fn()} />);
     await waitFor(() => expect(builderStatus).toHaveBeenCalledTimes(1));
     expect(screen.queryByRole("button", { name: "Start Builder" })).not.toBeInTheDocument();
 
-    // Stopped from the Builder view while this modal sat open. Read once at
-    // mount, the modal would fail the build with a raw CLI error and never
-    // re-offer Start.
+    // Stopped from a terminal while this modal sat open — the Builder view is
+    // behind the backdrop and cannot be reached from here. Read once at mount,
+    // the modal would fail the build with a raw CLI error and never re-offer
+    // Start.
     vi.mocked(builderStatus).mockResolvedValue(BUILDER_DOWN);
     mockState = { ...mockState, status: "failed" };
     rerender(<BuildModal onClose={vi.fn()} />);

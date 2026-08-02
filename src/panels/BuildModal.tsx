@@ -48,10 +48,12 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
 
   const running = build.status === "running";
 
-  // Re-checked whenever the build's status moves, because a builder stopped
-  // from the Builder view while this modal is open would otherwise leave the
-  // status read at mount standing: the build fails with a raw CLI error and
-  // Start Builder is never re-offered short of closing and reopening.
+  // Re-checked whenever the build's status moves, because the builder can go
+  // down while this modal sits open: `container builder stop` in a terminal, or
+  // the builder VM exiting on its own. Not from the Builder view, which the
+  // backdrop covers for as long as the modal is up. Left on the reading taken
+  // at mount, the build fails with a raw CLI error and Start Builder is never
+  // re-offered short of closing and reopening.
   useEffect(() => {
     let live = true;
     builderStatus()
@@ -211,8 +213,15 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
           <div className={styles.notice}>
             <span>The builder is not running.</span>
             {/* `container builder start` takes seconds; a second click would
-                spawn a second one. */}
-            <button className={styles.iconBtn} onClick={handleStartBuilder} disabled={startingBuilder}>
+                spawn a second one. `running` too, because this notice can
+                surface mid-build when the builder goes down underneath one:
+                a fresh builder does not rescue that build, so the click only
+                boots a VM the user did not ask for. */}
+            <button
+              className={styles.iconBtn}
+              onClick={handleStartBuilder}
+              disabled={startingBuilder || running}
+            >
               Start Builder
             </button>
           </div>
