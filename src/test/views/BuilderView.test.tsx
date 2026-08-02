@@ -158,6 +158,27 @@ describe("BuilderView", () => {
     expect(builderStart).not.toHaveBeenCalled();
   });
 
+  // Fix A: act() must clear cpuError so the validation message does not linger
+  // when the user starts a different action (e.g. Delete) without first editing
+  // the CPUs field. The onChange clear covers the "edit and retry" path; act()
+  // covers the "abandon and do something else" path.
+  it("clears the validation error when any action starts", async () => {
+    vi.mocked(builderStatus).mockResolvedValue(STOPPED);
+    render(<BuilderView />);
+    await screen.findByText("Stopped");
+    // Type an invalid CPUs value → validation error appears.
+    await userEvent.type(screen.getByLabelText("CPUs"), "0");
+    await userEvent.click(screen.getByRole("button", { name: "Start" }));
+    expect(screen.getByText(/whole number of 1 or more/i)).toBeInTheDocument();
+    // Now start a delete flow — act() must clear the validation error
+    // even though the CPUs field was never edited.
+    await userEvent.click(screen.getByRole("button", { name: "Delete" }));
+    await userEvent.click(screen.getByRole("button", { name: "Confirm Delete" }));
+    await waitFor(() =>
+      expect(screen.queryByText(/whole number of 1 or more/i)).not.toBeInTheDocument(),
+    );
+  });
+
   // Fix A: editing the CPUs field clears the validation error so the message
   // does not linger after the user has already started correcting the value.
   it("clears the validation error when the CPUs field is edited", async () => {
