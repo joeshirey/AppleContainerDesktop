@@ -6,6 +6,7 @@
 .status { font-size: 0.9rem; font-weight: 600; color: var(--fg); }
 .alloc { font-size: 0.78rem; color: var(--gray); }
 .raw { font-size: 0.75rem; color: var(--gray); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.note { font-size: 0.78rem; color: var(--gray); }
 .field { display: flex; flex-direction: column; gap: 4px; }
 .label { font-size: 0.75rem; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: 0.05em; }
 .input { height: 32px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font-size: 0.85rem; color: var(--fg); }

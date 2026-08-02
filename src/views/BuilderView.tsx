@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { builderStatus, builderStart, builderStop, builderDelete } from "../api";
 import { StatusDot } from "../components/StatusDot";
+import { useBuild } from "../hooks/useBuild";
 import { positiveInt, CPUS_INVALID } from "../lib/validation";
 import type { BuilderState } from "../types";
 import styles from "./BuilderView.module.css";
@@ -10,6 +11,9 @@ function message(e: unknown): string {
 }
 
 export function BuilderView() {
+  // Closing the build modal leaves the build running, so this view is reachable
+  // with one in flight and nothing on screen would otherwise say so.
+  const { build } = useBuild();
   const [state, setState] = useState<BuilderState | null>(null);
   const [cpus, setCpus] = useState("");
   const [memory, setMemory] = useState("");
@@ -100,6 +104,12 @@ export function BuilderView() {
   const exists = state?.exists ?? false;
   const running = state?.running ?? false;
 
+  // The builder is where the build is happening, so Stop and Delete are aimed
+  // at the process producing it. Nothing downstream would notice: the Images
+  // strip keeps saying "Building …" and the modal only re-reads the builder
+  // when the build's status moves, which stopping it from here does not do.
+  const building = build.status === "running";
+
   // Three states, because "no builder container at all" is what a machine that
   // has never built anything reports and it is not the same as stopped.
   const label = !state ? "Checking…" : running ? "Running" : exists ? "Stopped" : "Not created";
@@ -138,6 +148,11 @@ export function BuilderView() {
           {allocation && <span className={styles.alloc}>{allocation}</span>}
         </div>
         {unrecognised && <span className={styles.raw}>{state.raw}</span>}
+        {building && (
+          <span className={styles.note}>
+            A build is in progress. Stopping or deleting the builder would interrupt it.
+          </span>
+        )}
         {!running && (
           <>
             <div className={styles.field}>
@@ -172,7 +187,7 @@ export function BuilderView() {
             <button
               className={styles.btn}
               onClick={() => act(() => builderStop())}
-              disabled={acting}
+              disabled={acting || building}
             >
               Stop
             </button>
@@ -199,7 +214,7 @@ export function BuilderView() {
                 <button
                   className={styles.btnDanger}
                   onClick={() => act(() => builderDelete())}
-                  disabled={acting}
+                  disabled={acting || building}
                 >
                   Confirm Delete
                 </button>
@@ -215,7 +230,7 @@ export function BuilderView() {
               <button
                 className={styles.btnDanger}
                 onClick={() => setConfirmDelete(true)}
-                disabled={acting}
+                disabled={acting || building}
               >
                 Delete
               </button>

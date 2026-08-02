@@ -3,17 +3,29 @@ import { act as reactAct, render, screen, waitFor } from "@testing-library/react
 import userEvent from "@testing-library/user-event";
 import { BuilderView } from "../../views/BuilderView";
 import { builderStatus, builderStart, builderStop, builderDelete } from "../../api";
-import type { BuilderState } from "../../types";
+import { IDLE_BUILD } from "../../hooks/useBuild";
+import type { BuilderState, BuildState } from "../../types";
 
 vi.mock("../../api", () => ({
   builderStatus: vi.fn(),
   builderStart: vi.fn(),
   builderStop: vi.fn(),
   builderDelete: vi.fn(),
+  // Unused by this view, but the real `useBuild` imports it and this factory
+  // replaces the whole module.
+  getBuildState: vi.fn(),
 }));
+
+vi.mock("../../hooks/useBuild", async () => {
+  const actual = await vi.importActual<typeof import("../../hooks/useBuild")>("../../hooks/useBuild");
+  return { ...actual, useBuild: () => ({ build: mockBuild, refresh: vi.fn() }) };
+});
+
+let mockBuild: BuildState = IDLE_BUILD;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mockBuild = IDLE_BUILD;
   vi.mocked(builderStart).mockResolvedValue(undefined);
   vi.mocked(builderStop).mockResolvedValue(undefined);
   vi.mocked(builderDelete).mockResolvedValue(undefined);
@@ -444,6 +456,42 @@ describe("BuilderView", () => {
     userEvent.click(screen.getByRole("button", { name: "Start" }));
     await waitFor(() => expect(screen.getByRole("button", { name: "Confirm Delete" })).toBeDisabled());
     await reactAct(async () => { resolve(); });
+  });
+
+  // Closing the build modal leaves the build running, and this view is the
+  // next click along in the sidebar. It showed "Running" and a live Stop
+  // button with nothing to say a build was using the builder, and stopping it
+  // is invisible from here: the Images strip goes on saying "Building …" and
+  // the modal's builder re-check is keyed on a status that never moves.
+  const buildingState = { ...IDLE_BUILD, buildId: 1, status: "running" as const, tag: "app:latest" };
+
+  it("will not stop the builder while a build is running", async () => {
+    mockBuild = buildingState;
+    vi.mocked(builderStatus).mockResolvedValue(RUNNING);
+    render(<BuilderView />);
+    await screen.findByText("Running");
+    expect(screen.getByRole("button", { name: "Stop" })).toBeDisabled();
+    expect(screen.getByText(/build is in progress/i)).toBeInTheDocument();
+  });
+
+  // A builder stopped from outside while a build was in flight leaves this
+  // view offering Delete over a build that has not noticed yet.
+  it("will not delete the builder while a build is running", async () => {
+    mockBuild = buildingState;
+    vi.mocked(builderStatus).mockResolvedValue(STOPPED);
+    render(<BuilderView />);
+    await screen.findByText("Stopped");
+    expect(screen.getByRole("button", { name: "Delete" })).toBeDisabled();
+  });
+
+  // The anchor for the two above: with no build in flight the buttons work as
+  // they always did and the note stays out of the way.
+  it("leaves Stop alone and says nothing when no build is running", async () => {
+    vi.mocked(builderStatus).mockResolvedValue(RUNNING);
+    render(<BuilderView />);
+    await screen.findByText("Running");
+    expect(screen.getByRole("button", { name: "Stop" })).toBeEnabled();
+    expect(screen.queryByText(/build is in progress/i)).not.toBeInTheDocument();
   });
 
   // New: acting disable — controls must be disabled while an action is in
