@@ -50,6 +50,24 @@ describe("appendLine", () => {
     expect(state.dropped).toBe(10);
   });
 
+  // Eviction takes from the front while an out-of-order line goes in near the
+  // back, so the two could disagree about how many lines went missing. They do
+  // not, because the cap is applied to the spliced array rather than to the
+  // insertion: `dropped` plus the lines held has to stay equal to the number of
+  // seqs the backend produced, or the "N earlier lines dropped" notice lies.
+  it("counts an eviction caused by a line spliced into a full buffer", () => {
+    let state = running([], 0);
+    for (let i = 0; i < 5010; i++) state = appendLine(state, event(i, `line ${i}`));
+    state = appendLine(state, event(5011, "loser emitted first"));
+    state = appendLine(state, event(5010, "won the seq, lost the race"));
+    expect(state.lines).toHaveLength(5000);
+    expect(state.dropped).toBe(12);
+    expect(state.dropped + state.lines.length).toBe(5012);
+    expect(state.lines[0].seq).toBe(12);
+    expect(state.lines.slice(-2).map(l => l.seq)).toEqual([5010, 5011]);
+    expect(state.nextSeq).toBe(5012);
+  });
+
   // A reader thread that outlived an abandoned build keeps emitting. Its seqs
   // restart from 0 just like the current build's, so without the id check its
   // lines would be spliced into the middle of a transcript they do not belong
