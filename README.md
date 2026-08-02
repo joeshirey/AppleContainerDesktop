@@ -230,13 +230,13 @@ or stop it.
 ## Development
 
 ```sh
-npm test                    # 272 frontend tests (Vitest + Testing Library)
+npm test                    # 278 frontend tests (Vitest + Testing Library)
 npm run test:watch
 npm run build               # tsc + vite, the typecheck gate
 cd src-tauri
 cargo fmt --check
 cargo clippy --all-targets --locked -- -D warnings
-cargo test --locked         # 105 Rust tests
+cargo test --locked         # 106 Rust tests
 cargo build --locked
 ```
 

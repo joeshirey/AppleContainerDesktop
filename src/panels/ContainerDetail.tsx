@@ -11,6 +11,7 @@ type Tab = "info" | "logs" | "exec" | "settings";
 export function ContainerDetail({ container, onAction, onRemove }: { container: Container; onAction?: () => void; onRemove?: () => void }) {
   const [tab, setTab] = useState<Tab>("info");
   const [stats, setStats] = useState<ContainerStats | null>(null);
+  const [statsPending, setStatsPending] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [confirmRemove, setConfirmRemove] = useState(false);
   const isRunning = container.status.toLowerCase() === "running";
@@ -19,7 +20,16 @@ export function ContainerDetail({ container, onAction, onRemove }: { container: 
   useEffect(() => {
     if (!isRunning || tab !== "info") return;
     let live = true;
-    getStats(container.id).then(s => { if (live) setStats(s); }).catch(() => {});
+    // The pending flag hides whatever is in `stats` while the call is in flight, so
+    // this clear is only visible when the new call fails: the catch below swallows
+    // the error, and without the clear the panel would settle back onto the numbers
+    // belonging to the container you were looking at before, under the new name.
+    setStats(null);
+    setStatsPending(true);
+    getStats(container.id)
+      .then(s => { if (live) setStats(s); })
+      .catch(() => {})
+      .finally(() => { if (live) setStatsPending(false); });
     return () => { live = false; };
   }, [container.id, tab, isRunning]);
 
@@ -83,10 +93,13 @@ export function ContainerDetail({ container, onAction, onRemove }: { container: 
       <div className={tab === "settings" ? styles.settingsBody : styles.body}>
         {tab === "info" && (
           <div className={styles.infoTab}>
-            {isRunning && stats && (
+            {/* Rendered as soon as the container is running rather than when the
+                numbers land, so the row holds its space instead of appearing two
+                seconds later and shoving the grid below it down the panel. */}
+            {isRunning && (
               <div className={styles.statsRow}>
-                <Stat label="CPU" value={stats.cpu ?? "—"} />
-                <Stat label="Memory" value={stats.memory ?? "—"} />
+                <Stat label="CPU" value={statsPending ? "…" : stats?.cpu ?? "—"} />
+                <Stat label="Memory" value={statsPending ? "…" : stats?.memory ?? "—"} />
               </div>
             )}
             <div className={styles.grid}>
