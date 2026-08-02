@@ -50,9 +50,18 @@ interface BuildDone {
 /// A line from a newer build means a build started that this state has not
 /// seen yet, so the transcript restarts rather than appending to the old one.
 ///
-/// Within one build, a seq already accounted for is a duplicate. Those are
-/// expected: the listener is attached before the snapshot is read, so anything
-/// printed in that window arrives twice.
+/// Within one build, a seq already held is a duplicate. Those are expected: the
+/// listener is attached before the snapshot is read, so anything printed in
+/// that window arrives twice.
+///
+/// Everything else is inserted at its place in seq order rather than at the
+/// end, because arrival order does not follow seq order. Each reader thread
+/// takes its seq under the backend's buffer lock and emits after releasing it,
+/// so between two lines numbered n and n+1 the later one can reach the
+/// dispatcher first. Deduping against a high-water mark instead of the lines
+/// actually held would throw line n away for good — nothing re-reads the
+/// snapshot mid-build, and the drop would not even be counted, so the pane
+/// would show a transcript missing a line with nothing saying so.
 export function appendLine(state: BuildState, incoming: BuildOutput): BuildState {
   if (incoming.buildId < state.buildId) return state;
   if (incoming.buildId > state.buildId) {
@@ -64,13 +73,30 @@ export function appendLine(state: BuildState, incoming: BuildOutput): BuildState
       nextSeq: incoming.seq + 1,
     };
   }
-  if (incoming.seq < state.nextSeq) return state;
-  const lines = [...state.lines, incoming];
+  // Below the oldest line held, a straggler and a replay of an evicted line are
+  // indistinguishable. The evicted one is already counted in `dropped`, so
+  // re-admitting it would seat it at the head of the transcript underneath a
+  // notice saying it is gone.
+  const oldest = state.lines[0];
+  if (oldest !== undefined && incoming.seq < oldest.seq) return state;
+
+  // Scanning back from the end, because the ordinary case is a line that
+  // belongs last and the out-of-order ones are neighbours of it: the race is
+  // between two lines the readers numbered moments apart, not between a line
+  // and the far end of a 5000-line buffer.
+  let at = state.lines.length;
+  while (at > 0 && state.lines[at - 1].seq > incoming.seq) at--;
+  if (at > 0 && state.lines[at - 1].seq === incoming.seq) return state;
+
+  const lines = [...state.lines.slice(0, at), incoming, ...state.lines.slice(at)];
   const evicted = Math.max(0, lines.length - MAX_LINES);
   return {
     ...state,
     lines: lines.slice(-MAX_LINES),
-    nextSeq: incoming.seq + 1,
+    // Never moves backwards. A late line does not make the lines already held
+    // unseen, and winding the boundary back would have `reconcile` re-admit
+    // them from the next snapshot as though they were new.
+    nextSeq: Math.max(state.nextSeq, incoming.seq + 1),
     dropped: state.dropped + evicted,
   };
 }
@@ -105,8 +131,11 @@ export function reconcile(current: BuildState, snapshot: BuildState): BuildState
     ...snapshot,
     ...outcome,
     lines: merged.slice(-MAX_LINES),
-    // Lines in any state this module produces are ascending by seq, so the
-    // last element gives the correct next expected sequence number.
+    // `appendLine` inserts in seq order rather than at the end, so lines in
+    // any state this module produces ascend by seq and the last element of
+    // `ahead` carries the highest one. Append out of order instead and this
+    // boundary lands short of a line already on screen, which the next event
+    // then adds a second time.
     nextSeq: ahead[ahead.length - 1].seq + 1,
     dropped: snapshot.dropped + evicted,
   };

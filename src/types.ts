@@ -165,8 +165,9 @@ export interface BuildState {
   tag: string;
   exitCode: number | null;
   lines: BuildLine[];
-  /// The sequence number the next line will carry. Anything below it has
-  /// already been seen, which is how replayed events are discarded.
+  /// One past the highest sequence number seen. The dedupe boundary a snapshot
+  /// is merged against; live events are deduped against the lines themselves,
+  /// because they do not arrive in seq order.
   nextSeq: number;
   dropped: number;
 }

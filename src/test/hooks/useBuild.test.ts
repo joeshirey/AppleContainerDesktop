@@ -59,6 +59,36 @@ describe("appendLine", () => {
     expect(appendLine(state, event(0, "orphan", BUILD - 1))).toBe(state);
   });
 
+  // The two reader threads assign seq under the buffer lock and emit after
+  // releasing it, so the gap between the two is unsynchronised and stderr can
+  // reach the dispatcher first with the higher number. Discarding the line that
+  // lost the race loses it for good: nothing re-reads the snapshot mid-build.
+  it("keeps a line that arrives after a higher sequence number", () => {
+    const state = appendLine(running([line(0, "a")], 1), event(2, "c"));
+    const next = appendLine(state, event(1, "b"));
+    expect(next.lines.map(l => l.line)).toEqual(["a", "b", "c"]);
+    // The highest seq seen still decides what comes next; the late line must
+    // not wind the boundary back and re-admit lines already in the transcript.
+    expect(next.nextSeq).toBe(3);
+    expect(next.dropped).toBe(0);
+  });
+
+  // Dedupe is by seq, not by a monotone boundary, so a replayed line inside the
+  // retained window is still recognised no matter where in it it lands.
+  it("discards a duplicate of a line already inside the window", () => {
+    const state = running([line(0, "a"), line(1, "b"), line(2, "c")], 3);
+    expect(appendLine(state, event(1, "b"))).toBe(state);
+  });
+
+  // Below the oldest line held there is no way to tell a replay from a genuine
+  // straggler, and the line the snapshot evicted is already counted in
+  // `dropped`. Re-admitting it would put it at the head of the transcript,
+  // under a "dropped" notice that says it is gone.
+  it("drops a line older than the oldest one retained", () => {
+    const state = { ...running([line(10, "k"), line(11, "l")], 12), dropped: 10 };
+    expect(appendLine(state, event(3, "d"))).toBe(state);
+  });
+
   // The first line of a new build arrives before any snapshot naming it, so
   // the transcript has to restart here rather than appending to the old one.
   it("starts a fresh transcript when a newer build appears", () => {
@@ -126,6 +156,21 @@ describe("reconcile", () => {
     const live = running([line(0, "a")], 1);
     const snapshot = { ...running([line(0, "a")], 1), tag: "app:1" };
     expect(reconcile(live, snapshot).tag).toBe("app:1");
+  });
+
+  // The merge reads the last element of `ahead` for the new boundary, which is
+  // only the highest seq if the live lines are sorted. `appendLine` inserting
+  // an out-of-order line in place is what makes that hold: append it at the end
+  // instead and this reconcile hands back a nextSeq one line too low, so the
+  // next event re-admits a line already on screen.
+  it("takes the boundary from the highest seq after an out-of-order arrival", () => {
+    let live = running([], 0);
+    live = appendLine(live, event(0, "a"));
+    live = appendLine(live, event(2, "c"));
+    live = appendLine(live, event(1, "b"));
+    const next = reconcile(live, running([line(0, "a")], 1));
+    expect(next.lines.map(l => l.line)).toEqual(["a", "b", "c"]);
+    expect(next.nextSeq).toBe(3);
   });
 
   // The backend counts its own evictions, so the snapshot's tally is the
