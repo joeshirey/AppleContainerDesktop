@@ -40,6 +40,9 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
   const [memory, setMemory] = useState("");
   const [builderRunning, setBuilderRunning] = useState<boolean | null>(null);
   const [startingBuilder, setStartingBuilder] = useState(false);
+  // Held for the whole of `start_build`, because nothing else covers that
+  // window: `running` only turns true once the refresh behind it lands.
+  const [starting, setStarting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const logRef = useRef<HTMLDivElement>(null);
 
@@ -129,6 +132,7 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
       cpus: positiveInt(cpus),
       memory: trimmed(memory),
     };
+    setStarting(true);
     try {
       await startBuild(opts);
       // The backend now knows the tag, the id and that it is running, and
@@ -137,6 +141,8 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
       await refresh();
     } catch (e) {
       setError(message(e));
+    } finally {
+      setStarting(false);
     }
   }
 
@@ -321,13 +327,19 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
 
         <div className={styles.actions}>
           <button className={styles.btnGhost} onClick={onClose}>Close</button>
+          {/*
+            Build carries `starting` because two clicks spawn two `start_build`
+            invokes. The backend refuses the second, but the status effect then
+            wipes the "A build is already running." it answers with, leaving the
+            user a flash of an error about a build they only asked for once.
+          */}
           {running ? (
             <button className={styles.btnDanger} onClick={handleCancel}>Cancel Build</button>
           ) : (
             <button
               className={styles.btnPrimary}
               onClick={handleBuild}
-              disabled={!context.trim() || !tag.trim()}
+              disabled={starting || !context.trim() || !tag.trim()}
             >
               Build
             </button>

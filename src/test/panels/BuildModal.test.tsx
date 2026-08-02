@@ -166,6 +166,38 @@ describe("BuildModal", () => {
     expect(builderStart).not.toHaveBeenCalled();
   });
 
+  // Every sibling control guards its own in-flight window; this one did not.
+  // The backend refuses the second start, but the "A build is already running."
+  // it answers with is then wiped by the status effect, so the user gets a
+  // flash of an error about a build they only asked for once.
+  it("does not let Build be pressed twice", async () => {
+    let release = () => {};
+    vi.mocked(startBuild).mockReturnValue(new Promise<void>(r => { release = () => r(); }));
+    render(<BuildModal onClose={vi.fn()} />);
+    await fillRequired();
+
+    const build = screen.getByRole("button", { name: "Build" });
+    await userEvent.click(build);
+    expect(build).toBeDisabled();
+    await userEvent.click(build);
+    expect(startBuild).toHaveBeenCalledTimes(1);
+
+    await act(async () => { release(); });
+  });
+
+  // A start that never got off the ground leaves the form on screen with the
+  // status still idle, so this button is the only way to retry.
+  it("re-enables Build after a start that failed", async () => {
+    vi.mocked(startBuild).mockRejectedValue(new Error("Build context not found: /src/app"));
+    render(<BuildModal onClose={vi.fn()} />);
+    await fillRequired();
+
+    const build = screen.getByRole("button", { name: "Build" });
+    await userEvent.click(build);
+    expect(await screen.findByText("Build context not found: /src/app")).toBeInTheDocument();
+    expect(build).toBeEnabled();
+  });
+
   it("surfaces a build the backend refuses to start", async () => {
     vi.mocked(startBuild).mockRejectedValue(new Error("No Dockerfile or Containerfile in /src/app"));
     render(<BuildModal onClose={vi.fn()} />);
