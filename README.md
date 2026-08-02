@@ -166,7 +166,7 @@ way the CLI shortens them, so a Docker Hub image reads as `debian` rather than
 are the compressed download size of the arm64 variant, the only real figure the CLI's
 metadata records — the unpacked footprint on disk is larger.
 
-**Build Image…** opens a form for building from a Dockerfile; output streams into the
+**Build Image…** opens a dialog for building from a Dockerfile; output streams into the
 modal live, and closing it leaves the build running. While a build is in flight, a strip
 appears in the view; click it to reopen the output.
 
@@ -232,13 +232,13 @@ or stop it.
 ## Development
 
 ```sh
-npm test                    # 182 frontend tests (Vitest + Testing Library)
+npm test                    # 284 frontend tests (Vitest + Testing Library)
 npm run test:watch
 npm run build               # tsc + vite, the typecheck gate
 cd src-tauri
 cargo fmt --check
 cargo clippy --all-targets --locked -- -D warnings
-cargo test --locked         # 63 Rust tests
+cargo test --locked         # 102 Rust tests
 cargo build --locked
 ```
 
@@ -288,8 +288,10 @@ them. The original generated artwork is kept at [docs/app-icon-source.jpg](docs/
 
 Being honest about what isn't done:
 
-- **Build secrets and non-image build output.** `--secret` and `--output type=tar|local`
-  are not exposed. Everything else `container build` accepts is.
+- **Some `container build` flags.** The dialog covers tag, Dockerfile, `--no-cache`,
+  `--build-arg`, `--target`, `--platform`, `--label`, `--pull`, and the builder's
+  `--cpus` and `--memory`. Build secrets (`--secret`), non-image output
+  (`--output type=tar|local`), `--quiet`, `--arch`, and `--os` are not exposed.
 - **No registry logins.** `container registry login` is not wired up, so private
   registries only work if you have already authenticated at the prompt.
 - **No file copy in or out.** `container cp` and `container export` are missing.
