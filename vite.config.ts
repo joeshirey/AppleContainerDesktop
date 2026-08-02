@@ -14,7 +14,10 @@ export default defineConfig({
   envPrefix: ["VITE_", "TAURI_ENV_*"],
   build: {
     target: "safari16",
-    minify: !process.env.TAURI_ENV_DEBUG ? "esbuild" : false,
+    // Vite 8 no longer bundles esbuild; naming it here makes the build fail
+    // with "Cannot find package 'esbuild'". oxc is the replacement minifier
+    // that now ships with Vite.
+    minify: !process.env.TAURI_ENV_DEBUG ? "oxc" : false,
     sourcemap: !!process.env.TAURI_ENV_DEBUG,
   },
 });
