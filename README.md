@@ -166,9 +166,14 @@ way the CLI shortens them, so a Docker Hub image reads as `debian` rather than
 are the compressed download size of the arm64 variant, the only real figure the CLI's
 metadata records — the unpacked footprint on disk is larger.
 
-**Build Image…** opens a form for building from a Dockerfile; output streams into the modal live, and closing it leaves the build running. While a build is in flight, a strip appears in the view; click it to reopen the output.
+**Build Image…** opens a form for building from a Dockerfile; output streams into the
+modal live, and closing it leaves the build running. While a build is in flight, a strip
+appears in the view; click it to reopen the output.
 
-**Builder** — image builds run inside a builder container that is separate from the main container system. This view shows its status (running, stopped, or not created) and its CPU and memory allocation, and lets you start it with optional CPUs and memory, stop it, or delete it (confirm required).
+**Builder** — image builds run inside a builder container that is separate from the main
+container system. This view shows its status (running, stopped, or not created) and its
+CPU and memory allocation, and lets you start it with optional CPUs and memory, stop it,
+or delete it (confirm required).
 
 **Docker Hub** — search Hub without leaving the app; official images are badged and sorted
 first, then by pull count. Pick a tag and pull it. Results that can't actually be pulled
