@@ -2,13 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import { open } from "@tauri-apps/plugin-dialog";
 import { startBuild, cancelBuild, builderStatus, builderStart } from "../api";
 import { useBuild } from "../hooks/useBuild";
-import { positiveInt, CPUS_INVALID } from "../lib/validation";
+import { message } from "../lib/errors";
+import { positiveInt, validateCpus } from "../lib/validation";
 import type { BuildOptions, KeyValue } from "../types";
 import styles from "./BuildModal.module.css";
-
-function message(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
 
 /// Blank rows are the normal state of a form the user is still filling in, so
 /// they are dropped rather than sent as `=`.
@@ -100,8 +97,9 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
 
   async function handleStartBuilder() {
     setError(null);
-    if (cpus.trim() !== "" && positiveInt(cpus) === undefined) {
-      setError(CPUS_INVALID);
+    const invalidCpus = validateCpus(cpus);
+    if (invalidCpus) {
+      setError(invalidCpus);
       return;
     }
     setStartingBuilder(true);
@@ -117,8 +115,9 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
 
   async function handleBuild() {
     setError(null);
-    if (cpus.trim() !== "" && positiveInt(cpus) === undefined) {
-      setError(CPUS_INVALID);
+    const invalidCpus = validateCpus(cpus);
+    if (invalidCpus) {
+      setError(invalidCpus);
       return;
     }
     const opts: BuildOptions = {

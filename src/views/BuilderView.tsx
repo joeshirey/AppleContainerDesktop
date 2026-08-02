@@ -2,13 +2,10 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { builderStatus, builderStart, builderStop, builderDelete } from "../api";
 import { StatusDot } from "../components/StatusDot";
 import { useBuild } from "../hooks/useBuild";
-import { positiveInt, CPUS_INVALID } from "../lib/validation";
+import { message } from "../lib/errors";
+import { positiveInt, validateCpus } from "../lib/validation";
 import type { BuilderState } from "../types";
 import styles from "./BuilderView.module.css";
-
-function message(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
-}
 
 export function BuilderView() {
   // Closing the build modal leaves the build running, so this view is reachable
@@ -86,14 +83,15 @@ export function BuilderView() {
   }
 
   function handleStart() {
-    if (cpus.trim() !== "" && positiveInt(cpus) === undefined) {
+    const invalidCpus = validateCpus(cpus);
+    if (invalidCpus) {
       // Validation error lives in its own slot so that the status refresh
       // landing later cannot wipe it while the invalid value is still in the
       // CPUs box. Clear `error` too: clicking Start is a new attempt and the
       // user should not see a stale CLI error resurface when they later clear
       // the CPUs field (which clears cpuError via onChange but leaves error).
       setError(null);
-      setCpuError(CPUS_INVALID);
+      setCpuError(invalidCpus);
       return;
     }
     // Don't await — the return value of event handlers is ignored by React,

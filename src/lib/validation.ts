@@ -14,3 +14,14 @@ export function positiveInt(value: string): number | undefined {
 }
 
 export const CPUS_INVALID = "Builder CPUs must be a whole number of 1 or more.";
+
+/// What to tell the user about the CPUs field, or null when there is nothing to
+/// say and the value is safe to send.
+///
+/// Blank is not an error: it means the CLI picks the allocation. That is the
+/// half worth keeping in one place — written out at each call site, one of them
+/// eventually reads a blank field as invalid and blocks the user from starting
+/// anything until they name a number the CLI would have chosen anyway.
+export function validateCpus(cpus: string): string | null {
+  return cpus.trim() !== "" && positiveInt(cpus) === undefined ? CPUS_INVALID : null;
+}

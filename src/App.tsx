@@ -10,6 +10,7 @@ import { VolumesView }   from "./views/VolumesView";
 import { NetworksView }  from "./views/NetworksView";
 import { SettingsView }  from "./views/SettingsView";
 import { BuildProvider } from "./hooks/useBuild";
+import { message }       from "./lib/errors";
 import { checkSystemStatus, startSystem, stopSystem } from "./api";
 import type { NavSection } from "./types";
 import styles from "./App.module.css";
@@ -25,10 +26,6 @@ function ActiveView({ section }: { section: NavSection }): React.ReactElement {
     case "networks":   return <NetworksView />;
     case "settings":   return <SettingsView />;
   }
-}
-
-function message(e: unknown): string {
-  return e instanceof Error ? e.message : String(e);
 }
 
 export default function App() {

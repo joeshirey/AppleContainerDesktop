@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { positiveInt } from "../../lib/validation";
+import { positiveInt, validateCpus, CPUS_INVALID } from "../../lib/validation";
 
 // positiveInt is now called from two places (BuildModal and BuilderView) so
 // its boundary conditions belong in a focused unit test rather than being
@@ -40,5 +40,24 @@ describe("positiveInt", () => {
 
   it("trims whitespace before parsing", () => {
     expect(positiveInt(" 4 ")).toBe(4);
+  });
+});
+
+// The guard around positiveInt was written out by hand at all three call sites,
+// which is one place per site for the blank case to be got wrong: read a blank
+// field as invalid and the user is blocked from starting anything until they
+// type a number the CLI would have chosen for them anyway.
+describe("validateCpus", () => {
+  it("accepts a blank field, which means leave it to the CLI", () => {
+    expect(validateCpus("")).toBeNull();
+    expect(validateCpus("   ")).toBeNull();
+  });
+
+  it("accepts a count the backend can use", () => {
+    expect(validateCpus("4")).toBeNull();
+  });
+
+  it.each(["0", "-1", "1.5", "abc"])("rejects %s", value => {
+    expect(validateCpus(value)).toBe(CPUS_INVALID);
   });
 });
