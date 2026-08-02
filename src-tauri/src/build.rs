@@ -243,7 +243,7 @@ pub fn start_build(app: AppHandle, opts: BuildOptions) -> Result<(), String> {
         // The build is installed and Running by now, so leaving it there would
         // hold that status for the life of the app and refuse every later
         // build. Put the state back and take the child with it.
-        abandon(manager.inner());
+        abandon(&app);
         return Err(format!("Could not start the build: {e}"));
     }
 
@@ -282,12 +282,47 @@ fn start_threads(app: &AppHandle, stdout: ChildStdout, stderr: ChildStderr) -> s
 }
 
 /// Throw away a build that was installed but never got its threads, so the
-/// next one is not refused by a `Running` status nothing will ever end.
-fn abandon(manager: &BuildManager) {
+/// next one is not refused by a `Running` status nothing will ever end, and
+/// tell the pane the id it just discarded is over.
+///
+/// The announcement is not optional. A reader that did start keeps emitting
+/// under this id until its pipe closes, and the pane takes an id above the one
+/// it holds as a build that has started: without a done to close it, the pane
+/// sits at "running" for the rest of the session. Cancel answers "No build is
+/// running." because the state is already gone, and a refresh cannot help
+/// either, since the snapshot describes an older build the pane discards as
+/// stale.
+fn abandon(app: &AppHandle) {
+    let manager = app.state::<BuildManager>();
+    if let Some(done) = take_abandoned(manager.inner()) {
+        // Emitted with the lock released, the same way `finish` does it.
+        let _ = app.emit(BUILD_DONE_EVENT, &done);
+    }
+}
+
+/// Clear the active build and describe how it ended, or `None` when there was
+/// nothing installed to discard.
+///
+/// Split out from [`abandon`] so the state transition can be tested without an
+/// `AppHandle`. The path into it — a `thread::Builder::spawn` the OS refuses —
+/// cannot be provoked from a test.
+fn take_abandoned(manager: &BuildManager) -> Option<BuildDone> {
     let Ok(mut guard) = manager.active.lock() else {
-        return;
+        return None;
     };
-    if let Some(mut child) = guard.take().and_then(|mut active| active.child.take()) {
+    let mut active = guard.take()?;
+    let done = BuildDone {
+        build_id: active.build_id,
+        // Never Cancelled: nobody asked for this. The build died because the
+        // app could not run it, which is a failure to report rather than an
+        // outcome to explain away.
+        status: BuildStatus::Failed,
+        tag: active.tag.clone(),
+        // No code, because the child is signalled rather than waited on for its
+        // own verdict — the same absence a cancel leaves behind.
+        exit_code: None,
+    };
+    if let Some(mut child) = active.child.take() {
         // This waits with the lock held, which `finish` goes out of its way not
         // to do. What makes it safe is that the signal is SIGKILL: a reader
         // that started may be queued on this very lock with a line to push, and
@@ -297,6 +332,7 @@ fn abandon(manager: &BuildManager) {
         let _ = child.kill();
         let _ = child.wait();
     }
+    Some(done)
 }
 
 /// Long enough for any real build diagnostic, short enough that one runaway
@@ -611,6 +647,52 @@ mod tests {
     #[test]
     fn a_build_that_finished_before_the_cancel_landed_still_succeeded() {
         assert_eq!(final_status(true, Some(0)), BuildStatus::Succeeded);
+    }
+
+    fn running_build(manager: &BuildManager, tag: &str) -> u64 {
+        let build_id = manager.next_build_id();
+        *manager.active.lock().unwrap() = Some(ActiveBuild {
+            build_id,
+            tag: tag.to_string(),
+            status: BuildStatus::Running,
+            exit_code: None,
+            cancel_requested: false,
+            buffer: OutputBuffer::default(),
+            child: None,
+        });
+        build_id
+    }
+
+    // `start_build` installs the build before the threads that end it exist, so
+    // a thread the OS refuses leaves a Running build with no waiter. Clearing
+    // the state is not enough on its own: a reader that did start keeps
+    // emitting under that id, and the pane adopts it as a live build. With no
+    // done for the id being discarded nothing can move it off "running" —
+    // Cancel answers "No build is running." and a refresh describes an older
+    // build the pane ignores as stale.
+    #[test]
+    fn an_abandoned_build_reports_a_failure_for_the_id_it_discards() {
+        let manager = BuildManager::default();
+        let build_id = running_build(&manager, "app:latest");
+
+        let done = take_abandoned(&manager).expect("a build to discard");
+        assert_eq!(done.build_id, build_id);
+        assert_eq!(done.status, BuildStatus::Failed);
+        assert_eq!(done.tag, "app:latest");
+        assert_eq!(done.exit_code, None);
+        // The state goes with it, or the next build is refused by a Running
+        // status nothing will ever end.
+        assert!(manager.active.lock().unwrap().is_none());
+    }
+
+    // A done carries a build id, and the pane treats an id above the one it
+    // holds as a build that has started. Announcing one for a build that was
+    // never installed would wipe the transcript of the last real build and
+    // replace it with a failure that never happened.
+    #[test]
+    fn abandoning_with_nothing_installed_announces_nothing() {
+        let manager = BuildManager::default();
+        assert!(take_abandoned(&manager).is_none());
     }
 
     const CAP: usize = MAX_LINE_BYTES as usize;
