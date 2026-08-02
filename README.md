@@ -290,8 +290,9 @@ Being honest about what isn't done:
 
 - **Some `container build` flags.** The dialog covers tag, Dockerfile, `--no-cache`,
   `--build-arg`, `--target`, `--platform`, `--label`, `--pull`, and the builder's
-  `--cpus` and `--memory`. Build secrets (`--secret`), non-image output
-  (`--output type=tar|local`), `--quiet`, `--arch`, and `--os` are not exposed.
+  `--cpus` and `--memory`. Anything else the CLI accepts has to go through the terminal,
+  including build secrets (`--secret`), non-image output (`--output type=tar|local`),
+  `--arch`, `--os`, and the `--dns*` flags.
 - **No registry logins.** `container registry login` is not wired up, so private
   registries only work if you have already authenticated at the prompt.
 - **No file copy in or out.** `container cp` and `container export` are missing.
