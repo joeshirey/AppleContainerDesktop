@@ -188,7 +188,7 @@ pub struct BuildDone {
 ///
 /// Fails if the options do not resolve to a Dockerfile, if the CLI cannot be
 /// started, or if a build is already running.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_build(app: AppHandle, opts: BuildOptions) -> Result<(), String> {
     // Path checks touch the filesystem and say nothing about the running
     // build, so they happen before anything is locked.
@@ -510,7 +510,7 @@ fn finish(app: &AppHandle) {
 /// Kill the running build. Returns once the signal is away, not once the
 /// process is gone: the terminal status still arrives as [`BUILD_DONE_EVENT`],
 /// and it will be `Succeeded` if the build beat the signal.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn cancel_build(app: AppHandle) -> Result<(), String> {
     let manager = app.state::<BuildManager>();
     let mut guard = manager
@@ -542,7 +542,7 @@ pub fn cancel_build(app: AppHandle) -> Result<(), String> {
 /// The whole build state in one call, for a pane that has just opened or has
 /// been away. Everything in it is read under one lock, so the transcript and
 /// the `next_seq` that dedupes it against live events always agree.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_build_state(app: AppHandle) -> Result<BuildStateDto, String> {
     let manager = app.state::<BuildManager>();
     let guard = manager

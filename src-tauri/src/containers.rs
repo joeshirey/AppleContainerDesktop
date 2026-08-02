@@ -118,28 +118,28 @@ fn annotate_bind_mounts(raw: Value) -> Value {
     )
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_containers() -> Result<Value, String> {
     let raw = run_cmd(&["ls", "-a"]).map_err(|e| e.message)?;
     Ok(annotate_bind_mounts(raw))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_container(id: String) -> Result<(), String> {
     run_cmd(&["start", &id]).map(|_| ()).map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stop_container(id: String) -> Result<(), String> {
     run_cmd(&["stop", &id]).map(|_| ()).map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remove_container(id: String) -> Result<(), String> {
     run_cmd(&["rm", &id]).map(|_| ()).map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_logs(id: String, lines: u32) -> Result<String, String> {
     let n = lines.to_string();
     run_cmd(&["logs", "-n", &n, &id])
@@ -147,13 +147,13 @@ pub fn get_logs(id: String, lines: u32) -> Result<String, String> {
         .map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn exec_in_container(id: String, command: String) -> Result<String, String> {
     let args = vec!["exec", id.as_str(), "/bin/sh", "-c", command.as_str()];
     run_cmd(&args).map(text_output).map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_stats(id: String) -> Result<Value, String> {
     let raw = run_cmd(&["stats", "--no-stream", &id]).map_err(|e| e.message)?;
     // The CLI returns a JSON array; find the entry matching the requested id
@@ -168,12 +168,12 @@ pub fn get_stats(id: String) -> Result<Value, String> {
     Ok(raw)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn inspect_container(id: String) -> Result<Value, String> {
     run_cmd(&["inspect", &id]).map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn run_container(opts: Value) -> Result<(), String> {
     let mut args = vec!["run".to_string()];
     if opts.get("detach").and_then(|v| v.as_bool()).unwrap_or(true) {
@@ -213,7 +213,7 @@ pub fn run_container(opts: Value) -> Result<(), String> {
 
 /// Work out how `id` would be recreated with `edits` applied, without changing
 /// anything. Lets the UI show the exact command and what it cannot carry over.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn plan_recreate(id: String, edits: Value) -> Result<RecreatePlan, String> {
     let inspect = run_cmd(&["inspect", &id]).map_err(|e| e.message)?;
     let config = config_of(&inspect)
@@ -227,7 +227,7 @@ pub fn plan_recreate(id: String, edits: Value) -> Result<RecreatePlan, String> {
 /// The container has to be removed before the replacement can claim its name,
 /// so a failure after that point is reported with the full command line to let
 /// the user recover by hand.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn recreate_container(id: String, edits: Value) -> Result<(), String> {
     let plan = plan_recreate(id.clone(), edits)?;
     let args: Vec<&str> = plan.args.iter().map(String::as_str).collect();
@@ -242,31 +242,31 @@ pub fn recreate_container(id: String, edits: Value) -> Result<(), String> {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn check_system_status() -> Result<Value, String> {
     run_cmd(&["system", "status"]).map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn start_system() -> Result<(), String> {
     run_cmd(&["system", "start"])
         .map(|_| ())
         .map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stop_system() -> Result<(), String> {
     run_cmd(&["system", "stop"])
         .map(|_| ())
         .map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_images() -> Result<Value, String> {
     run_cmd(&["image", "ls"]).map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 /// `reference` must be a name like `docker.io/library/debian:latest`. The CLI
 /// rejects a descriptor digest here with "failed to delete one or more images".
 pub fn remove_image(reference: String) -> Result<(), String> {
@@ -275,31 +275,31 @@ pub fn remove_image(reference: String) -> Result<(), String> {
         .map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn pull_image(name: String) -> Result<(), String> {
     run_cmd(&["image", "pull", &name])
         .map(|_| ())
         .map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_machines() -> Result<Value, String> {
     run_cmd(&["machine", "ls"]).map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn prune_images() -> Result<(), String> {
     run_cmd(&["image", "prune"])
         .map(|_| ())
         .map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn inspect_machine(name: String) -> Result<Value, String> {
     run_cmd(&["machine", "inspect", &name]).map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_machine(
     image: String,
     name: Option<String>,
@@ -321,21 +321,21 @@ pub fn create_machine(
     run_cmd(&refs).map(|_| ()).map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn stop_machine(name: String) -> Result<(), String> {
     run_cmd(&["machine", "stop", &name])
         .map(|_| ())
         .map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_machine(name: String) -> Result<(), String> {
     run_cmd(&["machine", "delete", &name])
         .map(|_| ())
         .map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_default_machine(name: String) -> Result<(), String> {
     run_cmd(&["machine", "set-default", &name])
         .map(|_| ())
@@ -346,7 +346,7 @@ pub fn set_default_machine(name: String) -> Result<(), String> {
 /// shell inside the machine. So unlike `exec_in_container`, which has to spell
 /// out `/bin/sh -c`, the command goes across as a single argument — and pipes,
 /// globs, quotes, and `;` all work on the far side.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn machine_run(name: String, command: String) -> Result<String, String> {
     run_cmd(&["machine", "run", "--name", &name, &command])
         .map(text_output)
@@ -362,7 +362,7 @@ fn machine_logs_args<'a>(name: &'a str, lines: &'a str, boot: bool) -> Vec<&'a s
     args
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_machine_logs(name: String, lines: u32, boot: bool) -> Result<String, String> {
     let n = lines.to_string();
     run_cmd(&machine_logs_args(&name, &n, boot))
@@ -404,7 +404,7 @@ fn machine_set_args(
 
 /// Apply configuration to a machine. The CLI only reads the new values when the
 /// machine next boots, which the caller is expected to say out loud.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_machine_config(
     name: String,
     cpus: Option<u32>,
@@ -603,20 +603,20 @@ fn containers_or_empty() -> Value {
     run_cmd(&["ls", "-a"]).unwrap_or_else(|_| json!([]))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_volumes() -> Result<Value, String> {
     let raw = run_cmd(&["volume", "ls"]).map_err(|e| e.message)?;
     Ok(annotate_volumes(raw, &containers_or_empty()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_volume(name: String, size: Option<String>) -> Result<(), String> {
     let args = volume_create_args(&name, size.as_deref());
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
     run_cmd(&refs).map(|_| ()).map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_volume(name: String) -> Result<(), String> {
     run_cmd(&["volume", "delete", &name])
         .map(|_| ())
@@ -624,34 +624,34 @@ pub fn delete_volume(name: String) -> Result<(), String> {
 }
 
 /// Delete every volume no container references. Destroys their contents.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn prune_volumes() -> Result<String, String> {
     run_cmd(&["volume", "prune"])
         .map(text_output)
         .map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_networks() -> Result<Value, String> {
     let raw = run_cmd(&["network", "ls"]).map_err(|e| e.message)?;
     Ok(annotate_networks(raw, &containers_or_empty()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_network(name: String, subnet: Option<String>, internal: bool) -> Result<(), String> {
     let args = network_create_args(&name, subnet.as_deref(), internal);
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
     run_cmd(&refs).map(|_| ()).map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_network(name: String) -> Result<(), String> {
     run_cmd(&["network", "delete", &name])
         .map(|_| ())
         .map_err(|e| e.message)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn prune_networks() -> Result<String, String> {
     run_cmd(&["network", "prune"])
         .map(text_output)

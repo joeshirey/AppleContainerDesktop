@@ -60,7 +60,7 @@ pub fn parse_state(value: &Value) -> BuilderState {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn builder_status() -> Result<BuilderState, String> {
     let value = run_cmd(&["builder", "status"]).map_err(|e| e.message)?;
     Ok(parse_state(&value))
@@ -77,7 +77,7 @@ fn builder_start_args(cpus: Option<u32>, memory: Option<&str>) -> Vec<String> {
     args
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn builder_start(cpus: Option<u32>, memory: Option<String>) -> Result<(), String> {
     let args = builder_start_args(cpus, memory.as_deref());
     let refs: Vec<&str> = args.iter().map(String::as_str).collect();
