@@ -65,7 +65,11 @@ fn text_output(v: Value) -> String {
 /// Host paths this container bind-mounts that no longer exist.
 ///
 /// A mount with no host path at all (a volume, a tmpfs) is not a bind mount
-/// and is never reported.
+/// and is never reported. The CLI spells that absence two ways depending on the
+/// mount type — the key missing, or the key present and empty — so a blank
+/// source has to be discarded before the path check. It never exists on disk,
+/// so letting one through badges the container MOUNT MISSING and lists it with
+/// an empty path.
 fn missing_bind_mounts(container: &Value) -> Vec<String> {
     let mounts = container
         .get("configuration")
@@ -84,6 +88,7 @@ fn missing_bind_mounts(container: &Value) -> Vec<String> {
                 .or_else(|| m.get("src"))
                 .and_then(|s| s.as_str())
         })
+        .filter(|p| !p.trim().is_empty())
         .filter(|p| !std::path::Path::new(p).exists())
         .map(str::to_string)
         .collect()
@@ -702,6 +707,20 @@ mod tests {
     fn a_mount_with_no_source_at_all_is_not_missing() {
         // A volume or tmpfs mount has no host path to check.
         let c = with_mounts(json!([{ "destination": "/data" }]));
+        assert!(missing_bind_mounts(&c).is_empty());
+    }
+
+    #[test]
+    fn a_tmpfs_mount_with_a_blank_source_is_not_missing() {
+        // The shape `container inspect` actually emits for a tmpfs: the key is
+        // present and empty rather than absent. An empty path never exists, so
+        // reading it as a bind mount badges the container MOUNT MISSING and
+        // lists a bullet with no path next to it. The builder container ships
+        // with a tmpfs on /run, so this hit every install.
+        let c = with_mounts(json!([
+            { "destination": "/run", "source": "", "type": { "tmpfs": {} } },
+            { "destination": "/data", "source": "   " },
+        ]));
         assert!(missing_bind_mounts(&c).is_empty());
     }
 
