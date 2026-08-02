@@ -17,3 +17,4 @@
 .actBtn { padding: 3px 8px; border-radius: 5px; font-size: 0.68rem; font-weight: 500; border: 1px solid var(--border); background: var(--bg); color: var(--fg); cursor: pointer; }
 .actBtnDanger { padding: 3px 8px; border-radius: 5px; font-size: 0.68rem; font-weight: 500; border: 1px solid var(--red-tint-border); background: var(--red-tint-bg); color: var(--red); cursor: pointer; }
 .msg { padding: 32px; text-align: center; color: var(--gray); font-size: 0.85rem; }
+.buildStrip { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; font-size: 0.8rem; color: var(--fg); cursor: pointer; }

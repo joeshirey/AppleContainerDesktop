@@ -2,6 +2,8 @@ import { useState, useMemo, useEffect, useCallback } from "react";
 import { listImages, removeImage, pruneImages } from "../api";
 import { RunModal } from "../panels/RunModal";
 import { PullModal } from "../panels/PullModal";
+import { BuildModal } from "../panels/BuildModal";
+import { useBuild } from "../hooks/useBuild";
 import type { Image } from "../types";
 import styles from "./ImagesView.module.css";
 
@@ -10,7 +12,9 @@ export function ImagesView() {
   const [filter, setFilter] = useState("");
   const [loading, setLoading] = useState(true);
   const [showPull, setShowPull] = useState(false);
+  const [showBuild, setShowBuild] = useState(false);
   const [runImage, setRunImage] = useState<string | null>(null);
+  const { build } = useBuild();
   const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
   const [confirmPrune, setConfirmPrune] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -26,6 +30,13 @@ export function ImagesView() {
   }, []);
 
   useEffect(() => { fetchImages(); }, [fetchImages]);
+
+  // Refresh the image list when a build succeeds so the new image appears
+  // without the user having to reload. buildId is a dependency so each
+  // separate build's success fires the refresh independently.
+  useEffect(() => {
+    if (build.status === "succeeded") fetchImages();
+  }, [build.buildId, build.status, fetchImages]);
 
   const filtered = useMemo(() => {
     const q = filter.toLowerCase();
@@ -67,6 +78,7 @@ export function ImagesView() {
         <span className={styles.title}>Images</span>
         <input className={styles.search} placeholder="Filter images…" value={filter} onChange={e => setFilter(e.target.value)} />
         <button className={styles.btnGhost} onClick={() => setShowPull(true)}>Pull Image…</button>
+        <button className={styles.btnGhost} onClick={() => setShowBuild(true)}>Build Image…</button>
         {confirmPrune ? (
           <>
             <button className={styles.btnDanger} onClick={handlePrune}>Confirm Prune</button>
@@ -77,6 +89,11 @@ export function ImagesView() {
         )}
       </div>
       {error && <div className={styles.error}>{error}</div>}
+      {build.status === "running" && (
+        <button className={styles.buildStrip} onClick={() => setShowBuild(true)}>
+          Building {build.tag}… click to view output
+        </button>
+      )}
       <div className={styles.tableWrap}>
         <div className={styles.tableHeader}>
           <span>Repository</span><span>Tag</span><span>Size</span><span>Created</span><span></span>
@@ -105,6 +122,7 @@ export function ImagesView() {
       </div>
       {showPull && <PullModal onClose={() => setShowPull(false)} onPulled={fetchImages} />}
       {runImage && <RunModal defaultImage={runImage} onClose={() => setRunImage(null)} onRun={() => { setRunImage(null); }} />}
+      {showBuild && <BuildModal onClose={() => setShowBuild(false)} />}
     </div>
   );
 }

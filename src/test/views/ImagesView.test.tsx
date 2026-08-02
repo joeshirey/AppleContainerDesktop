@@ -8,6 +8,7 @@ vi.mock("../../api", () => ({
   removeImage: vi.fn(),
   pruneImages: vi.fn(),
   runContainer: vi.fn(),
+  getBuildState: vi.fn(),
 }));
 vi.mock("../../panels/PullModal", () => ({
   PullModal: ({ onClose }: any) => (
@@ -24,6 +25,19 @@ vi.mock("../../panels/RunModal", () => ({
     </div>
   ),
 }));
+vi.mock("../../panels/BuildModal", () => ({
+  BuildModal: ({ onClose }: any) => (
+    <div data-testid="build-modal">
+      <button onClick={onClose}>close-build</button>
+    </div>
+  ),
+}));
+vi.mock("../../hooks/useBuild", async () => {
+  const actual = await vi.importActual<typeof import("../../hooks/useBuild")>("../../hooks/useBuild");
+  return { ...actual, useBuild: () => ({ build: mockBuild, refresh: async () => {} }) };
+});
+
+let mockBuild = { buildId: 0, status: "idle", tag: "", exitCode: null, lines: [], nextSeq: 0, dropped: 0 };
 
 import { listImages, removeImage, pruneImages } from "../../api";
 const mockList = vi.mocked(listImages);
@@ -38,6 +52,7 @@ const IMAGES = [
 describe("ImagesView", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockBuild = { buildId: 0, status: "idle", tag: "", exitCode: null, lines: [], nextSeq: 0, dropped: 0 };
     mockList.mockResolvedValue(IMAGES);
     mockRemove.mockResolvedValue(undefined);
     mockPrune.mockResolvedValue(undefined);
@@ -88,5 +103,37 @@ describe("ImagesView", () => {
     expect(screen.getByText("Confirm Remove")).toBeInTheDocument();
     await userEvent.click(screen.getByText("Confirm Remove"));
     await waitFor(() => expect(mockRemove).toHaveBeenCalledWith("docker.io/library/nginx:latest"));
+  });
+
+  it("opens the build modal", async () => {
+    mockList.mockResolvedValue([]);
+    render(<ImagesView />);
+    await userEvent.click(await screen.findByRole("button", { name: "Build Image…" }));
+    expect(screen.getByTestId("build-modal")).toBeInTheDocument();
+  });
+
+  // The point of letting a build detach is being able to get back to it.
+  it("shows a strip while a build is in flight and reopens the modal", async () => {
+    mockBuild = { ...mockBuild, status: "running", tag: "app:latest" } as any;
+    mockList.mockResolvedValue([]);
+    render(<ImagesView />);
+    await userEvent.click(await screen.findByRole("button", { name: /Building app:latest/ }));
+    expect(screen.getByTestId("build-modal")).toBeInTheDocument();
+  });
+
+  it("hides the strip when no build is running", async () => {
+    mockList.mockResolvedValue([]);
+    render(<ImagesView />);
+    await screen.findByText("No images found.");
+    expect(screen.queryByRole("button", { name: /Building/ })).not.toBeInTheDocument();
+  });
+
+  it("refreshes the list when a build succeeds", async () => {
+    mockList.mockResolvedValue([]);
+    const { rerender } = render(<ImagesView />);
+    await waitFor(() => expect(mockList).toHaveBeenCalledTimes(1));
+    mockBuild = { ...mockBuild, status: "succeeded", tag: "app:latest" } as any;
+    rerender(<ImagesView />);
+    await waitFor(() => expect(mockList).toHaveBeenCalledTimes(2));
   });
 });
