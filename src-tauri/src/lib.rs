@@ -58,8 +58,6 @@ pub fn run() {
             build::get_build_state,
             builder::builder_status,
             builder::builder_start,
-            builder::builder_stop,
-            builder::builder_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

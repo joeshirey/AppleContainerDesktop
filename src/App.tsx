@@ -3,7 +3,6 @@ import { Sidebar }       from "./components/Sidebar";
 import { SystemBanner }  from "./components/SystemBanner";
 import { ContainersView } from "./views/ContainersView";
 import { ImagesView }    from "./views/ImagesView";
-import { BuilderView }   from "./views/BuilderView";
 import { HubSearchView } from "./views/HubSearchView";
 import { MachinesView }  from "./views/MachinesView";
 import { VolumesView }   from "./views/VolumesView";
@@ -19,7 +18,6 @@ function ActiveView({ section }: { section: NavSection }): React.ReactElement {
   switch (section) {
     case "containers": return <ContainersView />;
     case "images":     return <ImagesView />;
-    case "builder":    return <BuilderView />;
     case "hub":        return <HubSearchView />;
     case "machines":   return <MachinesView />;
     case "volumes":    return <VolumesView />;

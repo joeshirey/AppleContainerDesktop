@@ -110,7 +110,6 @@ export interface NetworkOptions {
 export type NavSection =
   | "containers"
   | "images"
-  | "builder"
   | "hub"
   | "machines"
   | "volumes"

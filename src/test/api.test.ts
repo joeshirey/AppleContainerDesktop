@@ -39,8 +39,6 @@ import {
   getBuildState,
   builderStatus,
   builderStart,
-  builderStop,
-  builderDelete,
 } from "../api";
 
 /// Trimmed to the fields we read, but the names and value shapes are copied
@@ -682,13 +680,5 @@ describe("api", () => {
     vi.mocked(invoke).mockResolvedValue(stopped);
     await expect(builderStatus()).resolves.toEqual(stopped);
     expect(invoke).toHaveBeenCalledWith("builder_status");
-  });
-
-  it("builderStop and builderDelete take no arguments", async () => {
-    vi.mocked(invoke).mockResolvedValue(undefined);
-    await builderStop();
-    expect(invoke).toHaveBeenCalledWith("builder_stop");
-    await builderDelete();
-    expect(invoke).toHaveBeenCalledWith("builder_delete");
   });
 });

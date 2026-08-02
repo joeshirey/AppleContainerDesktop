@@ -84,20 +84,6 @@ pub fn builder_start(cpus: Option<u32>, memory: Option<String>) -> Result<(), St
     run_cmd(&refs).map(|_| ()).map_err(|e| e.message)
 }
 
-#[tauri::command]
-pub fn builder_stop() -> Result<(), String> {
-    run_cmd(&["builder", "stop"])
-        .map(|_| ())
-        .map_err(|e| e.message)
-}
-
-#[tauri::command]
-pub fn builder_delete() -> Result<(), String> {
-    run_cmd(&["builder", "delete"])
-        .map(|_| ())
-        .map_err(|e| e.message)
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

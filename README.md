@@ -168,12 +168,10 @@ metadata records — the unpacked footprint on disk is larger.
 
 **Build Image…** opens a dialog for building from a Dockerfile; output streams into the
 modal live, and closing it leaves the build running. While a build is in flight, a strip
-appears in the view; click it to reopen the output.
-
-**Builder** — image builds run inside a builder container that is separate from the main
-container system. This view shows its status (running, stopped, or not created) and its
-CPU and memory allocation, and lets you start it with optional CPUs and memory, stop it,
-or delete it (confirm required).
+appears in the view; click it to reopen the output. Builds run in a separate BuildKit VM
+rather than in the main container system, so the dialog checks that VM first and offers
+to start it if it is down — you can set its CPUs and memory under Advanced. Stopping or
+removing it is a `container builder stop|delete` at the prompt; there is no GUI for it.
 
 **Docker Hub** — search Hub without leaving the app; official images are badged and sorted
 first, then by pull count. Pick a tag and pull it. Results that can't actually be pulled
@@ -232,13 +230,13 @@ or stop it.
 ## Development
 
 ```sh
-npm test                    # 284 frontend tests (Vitest + Testing Library)
+npm test                    # 272 frontend tests (Vitest + Testing Library)
 npm run test:watch
 npm run build               # tsc + vite, the typecheck gate
 cd src-tauri
 cargo fmt --check
 cargo clippy --all-targets --locked -- -D warnings
-cargo test --locked         # 102 Rust tests
+cargo test --locked         # 105 Rust tests
 cargo build --locked
 ```
 

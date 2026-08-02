@@ -1,9 +1,10 @@
 import { describe, it, expect } from "vitest";
 import { positiveInt, validateCpus, CPUS_INVALID } from "../../lib/validation";
 
-// positiveInt is now called from two places (BuildModal and BuilderView) so
-// its boundary conditions belong in a focused unit test rather than being
-// discovered implicitly through component tests at either call site.
+// The boundary conditions belong in a focused unit test rather than being
+// discovered implicitly through BuildModal's component tests: the interesting
+// cases are what a blank, fractional or negative field turns into on the way to
+// the backend, which is invisible from the component's rendered output.
 describe("positiveInt", () => {
   it("returns undefined for an empty string", () => {
     expect(positiveInt("")).toBeUndefined();
