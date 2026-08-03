@@ -1,0 +1,19 @@
+.backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; z-index: 100; }
+.modal { background: var(--surface); border-radius: 12px; padding: 24px; width: 620px; max-height: 86vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.25); display: flex; flex-direction: column; gap: 10px; }
+.title { font-size: 1rem; font-weight: 600; color: var(--fg); }
+.label { font-size: 0.75rem; font-weight: 600; color: var(--gray); text-transform: uppercase; letter-spacing: 0.05em; }
+.input { height: 34px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 0 10px; font-size: 0.85rem; color: var(--fg); width: 100%; box-sizing: border-box; }
+.pathRow { display: flex; gap: 8px; align-items: center; }
+.pairRow { display: flex; gap: 8px; align-items: center; }
+.checkRow { display: flex; gap: 8px; align-items: center; font-size: 0.85rem; color: var(--fg); }
+.advancedToggle { align-self: flex-start; background: none; border: none; padding: 0; font-size: 0.78rem; color: var(--blue); cursor: pointer; }
+.advanced { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--border); padding-top: 10px; }
+.log { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 10px; height: 260px; overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 0.72rem; line-height: 1.5; white-space: pre-wrap; color: var(--fg); }
+.error { font-size: 0.78rem; color: var(--red); padding: 6px 10px; background: var(--red-tint-bg); border: 1px solid var(--red-tint-border); border-radius: 6px; }
+.notice { font-size: 0.78rem; color: var(--gray); display: flex; gap: 8px; align-items: center; }
+.actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+.btnGhost { height: 32px; padding: 0 14px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; font-size: 0.78rem; cursor: pointer; color: var(--fg); }
+.btnPrimary { height: 32px; padding: 0 14px; background: var(--blue); color: white; border: none; border-radius: 7px; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+.btnPrimary:disabled { opacity: 0.5; cursor: default; }
+.btnDanger { height: 32px; padding: 0 14px; background: var(--red); color: white; border: none; border-radius: 7px; font-size: 0.78rem; font-weight: 600; cursor: pointer; }
+.iconBtn { height: 34px; padding: 0 10px; background: var(--bg); border: 1px solid var(--border); border-radius: 7px; font-size: 0.78rem; cursor: pointer; color: var(--fg); }

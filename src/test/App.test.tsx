@@ -11,6 +11,11 @@ vi.mock("../api", async importOriginal => ({
   checkSystemStatus: vi.fn(),
   startSystem: vi.fn(),
   stopSystem: vi.fn(),
+  // BuildProvider calls getBuildState on mount; invoke resolves to undefined
+  // without this, causing reconcile to crash inside the provider.
+  getBuildState: vi.fn().mockResolvedValue({
+    buildId: 0, status: "idle", tag: "", exitCode: null, lines: [], nextSeq: 0, dropped: 0,
+  }),
 }));
 
 import { checkSystemStatus, startSystem, stopSystem } from "../api";

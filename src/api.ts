@@ -1,5 +1,6 @@
 import { invoke } from "@tauri-apps/api/core";
 import type {
+  BuildOptions, BuildState, BuilderState,
   Container, ContainerEdits, ContainerStats, HubResult, Image, Machine,
   MachineEdits, Network, NetworkOptions, RecreatePlan, Volume,
 } from "./types";
@@ -231,3 +232,14 @@ export const deleteNetwork = (name: string): Promise<void> =>
   invoke("delete_network", { name });
 
 export const pruneNetworks = (): Promise<string> => invoke("prune_networks");
+
+export const startBuild = (opts: BuildOptions): Promise<void> => invoke("start_build", { opts });
+export const cancelBuild = (): Promise<void> => invoke("cancel_build");
+export const getBuildState = (): Promise<BuildState> => invoke("get_build_state");
+
+/// Builds run in a separate BuildKit VM. Only status and start are exposed: the
+/// build dialog checks the VM and offers to start it. Stopping or deleting it
+/// has no GUI caller — `container builder stop|delete` at the prompt does that.
+export const builderStatus = (): Promise<BuilderState> => invoke("builder_status");
+export const builderStart = (cpus?: number, memory?: string): Promise<void> =>
+  invoke("builder_start", { cpus, memory });

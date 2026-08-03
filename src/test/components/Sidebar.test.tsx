@@ -11,6 +11,15 @@ describe("Sidebar", () => {
     expect(screen.getByText("Settings")).toBeInTheDocument();
   });
 
+  // There was a Builder entry here for managing the BuildKit VM. It read as
+  // "the place you build images" and sent people looking for the Dockerfile
+  // form, which lives under Images. Building an image no longer needs it: the
+  // build dialog checks the VM and offers to start it inline.
+  it("offers no Builder entry", () => {
+    render(<Sidebar active="containers" onSelect={() => {}} />);
+    expect(screen.queryByText("Builder")).not.toBeInTheDocument();
+  });
+
   it("calls onSelect with the section key", () => {
     const fn = vi.fn();
     render(<Sidebar active="containers" onSelect={fn} />);

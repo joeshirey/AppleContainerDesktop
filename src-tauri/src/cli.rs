@@ -1,5 +1,5 @@
 use serde_json::Value;
-use std::process::Command;
+use std::process::{Child, Command, Stdio};
 
 #[derive(Debug)]
 pub struct CmdError {
@@ -30,6 +30,7 @@ fn needs_json(args: &[&str]) -> bool {
         &["network", "ls"],
         &["stats"],
         &["system", "status"],
+        &["builder", "status"],
     ];
     json_prefixes.iter().any(|p| args.starts_with(p))
 }
@@ -75,6 +76,27 @@ pub fn run_cmd(args: &[&str]) -> Result<Value, CmdError> {
     }
 }
 
+/// Start `container <args>` with stdout and stderr piped and stdin closed,
+/// returning the child without waiting for it.
+///
+/// `run_cmd` blocks until exit and parses the result, which is right for every
+/// command that finishes in under a second. A build does not, and its output
+/// matters while it runs, so it needs the process handle instead.
+///
+/// Both pipes must be drained continuously; if either reading thread stops
+/// before the child exits, the child will block once the pipe buffer fills.
+pub fn spawn_cmd(args: &[String]) -> Result<Child, CmdError> {
+    Command::new(container_bin())
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| CmdError {
+            message: format!("CLI not found: {e}"),
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -98,6 +120,7 @@ mod tests {
             &["network", "ls"][..],
             &["stats", "--no-stream", "c1"][..],
             &["system", "status"][..],
+            &["builder", "status"][..],
         ] {
             assert!(needs_json(args), "{args:?} should be requested as JSON");
         }
@@ -115,6 +138,21 @@ mod tests {
                 !needs_json(args),
                 "{args:?} should not be requested as JSON"
             );
+        }
+    }
+
+    // CI deliberately has no `container` binary, so both outcomes are valid:
+    // where it exists the child must have both pipes, and where it does not
+    // the error must be the same one `run_cmd` reports.
+    #[test]
+    fn spawn_cmd_pipes_both_output_streams() {
+        match spawn_cmd(&["--version".to_string()]) {
+            Ok(mut child) => {
+                assert!(child.stdout.is_some(), "stdout must be piped");
+                assert!(child.stderr.is_some(), "stderr must be piped");
+                let _ = child.wait();
+            }
+            Err(e) => assert!(e.message.contains("CLI not found"), "{}", e.message),
         }
     }
 }
