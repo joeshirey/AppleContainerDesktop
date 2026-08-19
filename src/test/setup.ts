@@ -28,4 +28,5 @@ vi.mock("@tauri-apps/api/event", () => ({
 
 vi.mock("@tauri-apps/plugin-dialog", () => ({
   open: vi.fn().mockResolvedValue(null),
+  save: vi.fn().mockResolvedValue(null),
 }));

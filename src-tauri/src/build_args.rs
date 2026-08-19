@@ -33,6 +33,8 @@ pub struct BuildOptions {
     #[serde(default)]
     pub pull: bool,
     #[serde(default)]
+    pub ssh: bool,
+    #[serde(default)]
     pub cpus: Option<u32>,
     #[serde(default)]
     pub memory: Option<String>,
@@ -104,6 +106,11 @@ pub fn build_argv(opts: &BuildOptions, dockerfile: &Path) -> Vec<String> {
     }
     if opts.pull {
         argv.push("--pull".to_string());
+    }
+    if opts.ssh {
+        // The CLI currently only accepts the literal value `default`.
+        argv.push("--ssh".to_string());
+        argv.push("default".to_string());
     }
     for pair in opts.build_args.iter().filter(|p| !p.key.trim().is_empty()) {
         argv.push("--build-arg".to_string());
@@ -235,6 +242,7 @@ mod tests {
         for flag in [
             "--no-cache",
             "--pull",
+            "--ssh",
             "--build-arg",
             "--label",
             "--target",
@@ -244,6 +252,17 @@ mod tests {
         ] {
             assert!(!argv.iter().any(|a| a == flag), "{flag} should be absent");
         }
+    }
+
+    // The CLI currently only accepts the literal value `default`, so the app
+    // exposes this as a checkbox rather than a free-text field.
+    #[test]
+    fn ssh_emits_the_default_agent_value() {
+        let mut o = opts("/ctx");
+        o.ssh = true;
+        let argv = build_argv(&o, Path::new("/ctx/Dockerfile"));
+        let i = argv.iter().position(|a| a == "--ssh").expect("--ssh");
+        assert_eq!(argv[i + 1], "default");
     }
 
     #[test]
@@ -280,6 +299,7 @@ mod tests {
         let mut o = opts("/ctx");
         o.no_cache = true;
         o.pull = true;
+        o.ssh = true;
         o.target = Some("builder".to_string());
         o.platform = Some("linux/amd64".to_string());
         o.cpus = Some(4);
@@ -287,6 +307,7 @@ mod tests {
         let argv = build_argv(&o, Path::new("/ctx/Dockerfile"));
         assert!(argv.contains(&"--no-cache".to_string()));
         assert!(argv.contains(&"--pull".to_string()));
+        assert!(argv.contains(&"--ssh".to_string()));
         assert!(argv.contains(&"linux/amd64".to_string()));
         assert!(argv.contains(&"builder".to_string()));
         assert!(argv.contains(&"4".to_string()));

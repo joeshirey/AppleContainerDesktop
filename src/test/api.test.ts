@@ -5,6 +5,7 @@ import {
   startContainer,
   stopContainer,
   removeContainer,
+  exportContainer,
   getLogs,
   execInContainer,
   getStats,
@@ -114,6 +115,13 @@ describe("api", () => {
     mockInvoke.mockResolvedValue(undefined);
     await removeContainer("abc");
     expect(mockInvoke).toHaveBeenCalledWith("remove_container", { id: "abc" });
+  });
+
+  // exportContainer
+  it("exportContainer calls invoke with export_container, id, and output", async () => {
+    mockInvoke.mockResolvedValue(undefined);
+    await exportContainer("abc", "/Users/me/abc.tar");
+    expect(mockInvoke).toHaveBeenCalledWith("export_container", { id: "abc", output: "/Users/me/abc.tar" });
   });
 
   // getLogs

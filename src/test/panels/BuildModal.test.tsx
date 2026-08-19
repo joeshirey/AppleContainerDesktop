@@ -87,6 +87,7 @@ describe("BuildModal", () => {
     await userEvent.click(screen.getByRole("button", { name: "Advanced" }));
     await userEvent.type(screen.getByLabelText("Platform"), "  linux/amd64  ");
     await userEvent.click(screen.getByLabelText("Always pull base images"));
+    await userEvent.click(screen.getByLabelText("Forward SSH agent"));
     await userEvent.click(screen.getByRole("button", { name: "Add label" }));
     await userEvent.type(screen.getByLabelText("Label name 1"), "org.opencontainers.image.source");
     await userEvent.type(screen.getByLabelText("Label value 1"), "https://example.test");
@@ -106,6 +107,7 @@ describe("BuildModal", () => {
       platform: "linux/amd64",
       labels: [{ key: "org.opencontainers.image.source", value: "https://example.test" }],
       pull: true,
+      ssh: true,
       cpus: 4,
       memory: "8G",
     });
@@ -131,6 +133,7 @@ describe("BuildModal", () => {
       platform: undefined,
       labels: [],
       pull: false,
+      ssh: false,
       cpus: undefined,
       memory: undefined,
     });
