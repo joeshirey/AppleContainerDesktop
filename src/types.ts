@@ -143,6 +143,7 @@ export interface BuildOptions {
   platform?: string;
   labels: KeyValue[];
   pull: boolean;
+  ssh: boolean;
   cpus?: number;
   memory?: string;
 }

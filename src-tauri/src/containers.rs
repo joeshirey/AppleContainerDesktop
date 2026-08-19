@@ -139,6 +139,15 @@ pub fn remove_container(id: String) -> Result<(), String> {
     run_cmd(&["rm", &id]).map(|_| ()).map_err(|e| e.message)
 }
 
+/// The CLI writes the tar straight to `output`, so no archive data ever
+/// passes through this process.
+#[tauri::command(async)]
+pub fn export_container(id: String, output: String) -> Result<(), String> {
+    run_cmd(&["export", "-o", &output, &id])
+        .map(|_| ())
+        .map_err(|e| e.message)
+}
+
 #[tauri::command(async)]
 pub fn get_logs(id: String, lines: u32) -> Result<String, String> {
     let n = lines.to_string();

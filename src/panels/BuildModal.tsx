@@ -33,6 +33,7 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
   const [platform, setPlatform] = useState("");
   const [labels, setLabels] = useState<KeyValue[]>([]);
   const [pull, setPull] = useState(false);
+  const [ssh, setSsh] = useState(false);
   const [cpus, setCpus] = useState("");
   const [memory, setMemory] = useState("");
   const [builderRunning, setBuilderRunning] = useState<boolean | null>(null);
@@ -130,6 +131,7 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
       platform: trimmed(platform),
       labels: filled(labels),
       pull,
+      ssh,
       cpus: positiveInt(cpus),
       memory: trimmed(memory),
     };
@@ -298,6 +300,10 @@ export function BuildModal({ onClose }: { onClose: () => void }) {
             <div className={styles.checkRow}>
               <input id="build-pull" type="checkbox" checked={pull} onChange={e => setPull(e.target.checked)} disabled={running} />
               <label htmlFor="build-pull">Always pull base images</label>
+            </div>
+            <div className={styles.checkRow}>
+              <input id="build-ssh" type="checkbox" checked={ssh} onChange={e => setSsh(e.target.checked)} disabled={running} />
+              <label htmlFor="build-ssh">Forward SSH agent</label>
             </div>
             <span className={styles.label}>Labels</span>
             {pairRows(labels, setLabels, "Label")}
