@@ -26,6 +26,7 @@ pub fn run() {
             start_container,
             stop_container,
             remove_container,
+            export_container,
             get_logs,
             exec_in_container,
             get_stats,

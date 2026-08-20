@@ -27,7 +27,7 @@ app does, you could have typed at the prompt yourself.
 |---|---|
 | **Mac** | Apple silicon. `container` does not run on Intel. |
 | **macOS** | 26 or newer. Apple does not support `container` below that. |
-| **`container` CLI** | Installed. Built against 1.2.0. |
+| **`container` CLI** | Installed. Built against 1.2.2. |
 | **To build** | Node.js 20+ and Rust via [rustup](https://rustup.rs). |
 
 Get the CLI from [apple/container releases](https://github.com/apple/container/releases),
@@ -286,13 +286,14 @@ original generated artwork is kept at [docs/app-icon-source.jpg](docs/app-icon-s
 ## Known gaps
 
 - **Some `container build` flags.** The dialog covers tag, Dockerfile, `--no-cache`,
-  `--build-arg`, `--target`, `--platform`, `--label`, `--pull`, and the builder's
+  `--build-arg`, `--target`, `--platform`, `--label`, `--pull`, `--ssh`, and the builder's
   `--cpus` and `--memory`. Anything else the CLI accepts has to go through the terminal,
   including build secrets (`--secret`), non-image output (`--output type=tar|local`),
   `--arch`, `--os`, and the `--dns*` flags.
 - **No registry logins.** `container registry login` is not wired up, so private
   registries only work if you already authenticated at the prompt.
-- **No file copy in or out.** `container cp` and `container export` are missing.
+- **No file copy in.** `container cp` is missing. `container export` is available from a
+  container's Export… button.
 - **Volume and network creation is partial on purpose.** Labels, driver options, the
   network plugin, and IPv6 prefixes all stay at the CLI's defaults. The panels expose
   size, subnet, and host-only because those are the ones that visibly change behaviour.

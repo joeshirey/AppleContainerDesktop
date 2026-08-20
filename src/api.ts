@@ -81,6 +81,7 @@ export const listContainers = (): Promise<Container[]> =>
 export const startContainer = (id: string): Promise<void> => invoke("start_container", { id });
 export const stopContainer = (id: string): Promise<void> => invoke("stop_container", { id });
 export const removeContainer = (id: string): Promise<void> => invoke("remove_container", { id });
+export const exportContainer = (id: string, output: string): Promise<void> => invoke("export_container", { id, output });
 export const getLogs = (id: string, lines: number): Promise<string> => invoke("get_logs", { id, lines });
 export const execInContainer = (id: string, command: string): Promise<string> => invoke("exec_in_container", { id, command });
 export const getStats = (id: string): Promise<ContainerStats> => invoke("get_stats", { id });

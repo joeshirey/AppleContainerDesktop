@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
+import { save } from "@tauri-apps/plugin-dialog";
 import type { Container, ContainerStats } from "../types";
-import { getStats, stopContainer, startContainer, removeContainer } from "../api";
+import { getStats, stopContainer, startContainer, removeContainer, exportContainer } from "../api";
 import { LogsPanel } from "./LogsPanel";
 import { ExecPanel } from "./ExecPanel";
 import { ContainerSettings } from "./ContainerSettings";
@@ -40,6 +41,16 @@ export function ContainerDetail({ container, onAction, onRemove }: { container: 
     catch (e) { setErr(e instanceof Error ? e.message : String(e)); }
   }
 
+  async function handleExport() {
+    try {
+      const dest = await save({ defaultPath: `${container.name}.tar` });
+      if (typeof dest !== "string") return;
+      await act(() => exportContainer(container.id, dest));
+    } catch (e) {
+      setErr(e instanceof Error ? e.message : String(e));
+    }
+  }
+
   return (
     <div className={styles.root}>
       <div className={styles.toolbar}>
@@ -56,6 +67,7 @@ export function ContainerDetail({ container, onAction, onRemove }: { container: 
           {isRunning
             ? <button className={styles.btnRed} onClick={() => act(() => stopContainer(container.id))}>Stop</button>
             : <button className={styles.btnGreen} onClick={() => act(() => startContainer(container.id))}>Start</button>}
+          <button className={styles.btnGhost} onClick={handleExport}>Export…</button>
           {!confirmRemove
             ? <button className={styles.btnGhost} onClick={() => setConfirmRemove(true)}>Remove</button>
             : <>

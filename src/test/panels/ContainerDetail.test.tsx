@@ -1,6 +1,8 @@
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
+import { save } from "@tauri-apps/plugin-dialog";
 import { ContainerDetail } from "../../panels/ContainerDetail";
 import type { Container } from "../../types";
 
@@ -9,7 +11,7 @@ const running: Container = { id: "abc", name: "nginx", image: "nginx:latest", st
 const stopped: Container = { id: "def", name: "redis", image: "redis:7", status: "stopped" };
 
 describe("ContainerDetail", () => {
-  beforeEach(() => { vi.clearAllMocks(); mock.mockResolvedValue({}); });
+  beforeEach(() => { vi.clearAllMocks(); mock.mockResolvedValue({}); vi.mocked(save).mockResolvedValue(null); });
 
   it("warns about missing bind-mount sources and names each path", () => {
     const broken: Container = {
@@ -45,6 +47,29 @@ describe("ContainerDetail", () => {
   it("shows Start button for stopped container", () => {
     render(<ContainerDetail container={stopped} onAction={() => {}} />);
     expect(screen.getByRole("button", { name: /start/i })).toBeInTheDocument();
+  });
+
+  // `container export` now works on live containers too, so the action is
+  // offered regardless of run state rather than only once a container stops.
+  it("exports a running container to the chosen destination", async () => {
+    vi.mocked(save).mockResolvedValue("/Users/me/nginx.tar");
+    render(<ContainerDetail container={running} onAction={() => {}} />);
+    await userEvent.click(screen.getByRole("button", { name: "Export…" }));
+
+    expect(save).toHaveBeenCalledWith(expect.objectContaining({ defaultPath: "nginx.tar" }));
+    await waitFor(() => expect(mock).toHaveBeenCalledWith("export_container", {
+      id: "abc", output: "/Users/me/nginx.tar",
+    }));
+  });
+
+  // Dismissing the save panel is not an error; there is simply nowhere to
+  // write the archive.
+  it("does nothing when the export destination picker is cancelled", async () => {
+    vi.mocked(save).mockResolvedValue(null);
+    render(<ContainerDetail container={stopped} onAction={() => {}} />);
+    await userEvent.click(screen.getByRole("button", { name: "Export…" }));
+
+    expect(mock).not.toHaveBeenCalledWith("export_container", expect.anything());
   });
 
   it("fetches stats on mount for running container", async () => {
