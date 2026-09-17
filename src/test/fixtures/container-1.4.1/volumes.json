@@ -1,0 +1,17 @@
+[
+  {
+    "configuration": {
+      "creationDate": "2026-09-17T16:14:21Z",
+      "driver": "local",
+      "format": "ext4",
+      "labels": {},
+      "name": "compat-test",
+      "options": {
+        "size": "1G"
+      },
+      "sizeInBytes": 1073741824,
+      "source": "/Users/test/Library/Application Support/com.apple.container/volumes/compat-test/volume.img"
+    },
+    "id": "compat-test"
+  }
+]

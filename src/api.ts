@@ -105,13 +105,14 @@ export const removeImage = (reference: string): Promise<void> =>
 export const pullImage = (name: string): Promise<void> => invoke("pull_image", { name });
 export const pruneImages = (): Promise<void> => invoke("prune_images");
 function normalizeMachine(raw: any): Machine {
+  const memory = raw.memory ?? raw.configuration?.memoryInBytes;
   return {
     name: raw.id ?? raw.name ?? "",
     status: raw.status?.state ?? (typeof raw.status === "string" ? raw.status : "stopped"),
     isDefault: raw.isDefault ?? raw.default ?? false,
-    cpus: raw.configuration?.cpus,
-    memoryMB: raw.configuration?.memoryInBytes
-      ? Math.round(raw.configuration.memoryInBytes / (1024 * 1024))
+    cpus: raw.cpus ?? raw.configuration?.cpus,
+    memoryMB: memory != null
+      ? Math.round(memory / (1024 * 1024))
       : undefined,
   };
 }

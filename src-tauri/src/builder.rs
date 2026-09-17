@@ -89,6 +89,19 @@ mod tests {
     use super::*;
     use serde_json::json;
 
+    #[test]
+    fn reads_captured_1_4_1_builder_status() {
+        let value = serde_json::from_str(include_str!(
+            "../../src/test/fixtures/container-1.4.1/builder.json"
+        ))
+        .unwrap();
+        let state = parse_state(&value);
+        assert!(state.exists);
+        assert!(!state.running);
+        assert_eq!(state.cpus, Some(2));
+        assert_eq!(state.memory_mb, Some(2048));
+    }
+
     fn builder(state: &str) -> Value {
         json!([{
             "id": "buildkit",

@@ -1,0 +1,100 @@
+[
+  {
+    "configuration": {
+      "capAdd": [
+        "ALL"
+      ],
+      "capDrop": [],
+      "creationDate": "2026-08-22T17:20:33Z",
+      "dns": {
+        "nameservers": [],
+        "options": [],
+        "searchDomains": []
+      },
+      "id": "buildkit",
+      "image": {
+        "descriptor": {
+          "digest": "sha256:b5b3f7fa81e662db6929f1ad66d835d151a1b03f682cfe5f9fcb17fa46d6bcc9",
+          "mediaType": "application/vnd.oci.image.index.v1+json",
+          "size": 856
+        },
+        "reference": "ghcr.io/apple/container-builder-shim/builder:0.13.1"
+      },
+      "initProcess": {
+        "arguments": [
+          "--debug",
+          "--vsock"
+        ],
+        "environment": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "BUILDKIT_SETUP_CGROUPV2_ROOT=1"
+        ],
+        "executable": "/usr/local/bin/container-builder-shim",
+        "rlimits": [],
+        "supplementalGroups": [],
+        "terminal": false,
+        "user": {
+          "id": {
+            "gid": 0,
+            "uid": 0
+          }
+        },
+        "workingDirectory": "/"
+      },
+      "labels": {
+        "com.apple.container.plugin": "builder",
+        "com.apple.container.resource.role": "builder"
+      },
+      "mounts": [
+        {
+          "destination": "/run",
+          "options": [],
+          "source": "",
+          "type": {
+            "tmpfs": {}
+          }
+        },
+        {
+          "destination": "/var/lib/container-builder-shim/exports",
+          "options": [],
+          "source": "/Users/test/Library/Application Support/com.apple.container/builder",
+          "type": {
+            "virtiofs": {}
+          }
+        }
+      ],
+      "networks": [
+        {
+          "network": "default",
+          "options": {
+            "hostname": "buildkit"
+          }
+        }
+      ],
+      "platform": {
+        "architecture": "arm64",
+        "os": "linux",
+        "variant": "v8"
+      },
+      "publishedPorts": [],
+      "publishedSockets": [],
+      "readOnly": false,
+      "resources": {
+        "cpuOverhead": 1,
+        "cpus": 2,
+        "memoryInBytes": 2147483648
+      },
+      "rosetta": true,
+      "runtimeHandler": "container-runtime-linux",
+      "ssh": false,
+      "sysctls": {},
+      "useInit": false,
+      "virtualization": false
+    },
+    "id": "buildkit",
+    "status": {
+      "networks": [],
+      "state": "stopped"
+    }
+  }
+]

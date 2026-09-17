@@ -27,7 +27,7 @@ app does, you could have typed at the prompt yourself.
 |---|---|
 | **Mac** | Apple silicon. `container` does not run on Intel. |
 | **macOS** | 26 or newer. Apple does not support `container` below that. |
-| **`container` CLI** | Installed. Built against 1.2.2. |
+| **`container` CLI** | 1.4.1 recommended and tested. |
 | **To build** | Node.js 20+ and Rust via [rustup](https://rustup.rs). |
 
 Get the CLI from [apple/container releases](https://github.com/apple/container/releases),
@@ -226,25 +226,29 @@ network is marked **Built-in** and has no Delete button at all, because
 **Settings.** Poll interval and default log line count, saved to `.settings.json`.
 
 A banner across the top tells you whether the container system is running and offers to
-start or stop it.
+start or stop it. If the status check fails, it shows the reason and offers a retry.
+
+Compatibility notes and the live test procedure are in
+[docs/container-1.4.1.md](docs/container-1.4.1.md).
 
 ## Development
 
 ```sh
-npm test                    # 278 frontend tests (Vitest + Testing Library)
+npm test                    # frontend tests (Vitest + Testing Library)
 npm run test:watch
 npm run build               # tsc + vite, the typecheck gate
 cd src-tauri
 cargo fmt --check
 cargo clippy --all-targets --locked -- -D warnings
-cargo test --locked         # 106 Rust tests
+cargo test --locked         # Rust tests; live smoke test ignored by default
 cargo build --locked
 ```
 
 CI runs all of these on every push and pull request. See
 [.github/workflows/ci.yml](.github/workflows/ci.yml). The job uses `macos-26`, the same
-platform the app requires, and does not install the `container` CLI. No test needs it,
-because the one test that shells out is checking the error path.
+platform the app requires, and does not install the `container` CLI. Default tests use
+captured JSON fixtures or tolerate a missing binary. The opt-in live smoke test requires
+a running service and creates disposable resources; see the compatibility notes above.
 
 Order matters if you run them by hand. `npm run build` has to come before any `cargo`
 command. `tauri-codegen` bakes `frontendDist` in at compile time and `dist/` is not

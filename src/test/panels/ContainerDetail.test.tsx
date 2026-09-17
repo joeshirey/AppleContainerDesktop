@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { vi, describe, it, expect, beforeEach } from "vitest";
 import { invoke } from "@tauri-apps/api/core";
@@ -76,6 +76,43 @@ describe("ContainerDetail", () => {
     mock.mockResolvedValue({ cpu: "0.5%", memory: "48 MB" });
     render(<ContainerDetail container={running} onAction={() => {}} />);
     await waitFor(() => expect(mock).toHaveBeenCalledWith("get_stats", { id: "abc" }));
+  });
+
+  it("samples numeric counters repeatedly and stops polling on unmount", async () => {
+    vi.useFakeTimers();
+    const clock = vi.spyOn(performance, "now");
+    clock.mockReturnValueOnce(1000).mockReturnValueOnce(6000);
+    mock.mockResolvedValueOnce({ cpuUsageUsec: 1000, memoryUsageBytes: 1048576 })
+      .mockResolvedValueOnce({ cpuUsageUsec: 2_501_000, memoryUsageBytes: 2097152 });
+    const view = render(<ContainerDetail container={running} />);
+    try {
+      await act(async () => {});
+      expect(screen.getByText("1.00 MiB")).toBeInTheDocument();
+      expect(screen.getByText("—")).toBeInTheDocument();
+      await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+      expect(screen.getByText("50.00%")).toBeInTheDocument();
+      expect(screen.getByText("2.00 MiB")).toBeInTheDocument();
+      view.unmount();
+      await act(async () => { await vi.advanceTimersByTimeAsync(10000); });
+      expect(mock).toHaveBeenCalledTimes(2);
+    } finally {
+      view.unmount();
+      clock.mockRestore();
+      vi.useRealTimers();
+    }
+  });
+
+  it("never overlaps slow stats requests", async () => {
+    vi.useFakeTimers();
+    mock.mockReturnValue(new Promise(() => {}));
+    const view = render(<ContainerDetail container={running} />);
+    try {
+      await act(async () => { await vi.advanceTimersByTimeAsync(15000); });
+      expect(mock).toHaveBeenCalledTimes(1);
+    } finally {
+      view.unmount();
+      vi.useRealTimers();
+    }
   });
 
   // `container stats` samples for about two seconds before it can report a CPU

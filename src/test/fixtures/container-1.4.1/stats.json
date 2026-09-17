@@ -1,0 +1,13 @@
+[
+  {
+    "blockReadBytes": 3343360,
+    "blockWriteBytes": 8192,
+    "cpuUsageUsec": 6222,
+    "id": "compat-test",
+    "memoryLimitBytes": 536870912,
+    "memoryUsageBytes": 3964928,
+    "networkRxBytes": 24426,
+    "networkTxBytes": 602,
+    "numProcesses": 1
+  }
+]

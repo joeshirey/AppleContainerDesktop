@@ -14,6 +14,9 @@ export interface ContainerStats {
   id?: string;
   cpu?: string;
   memory?: string;
+  cpuUsageUsec?: number;
+  memoryUsageBytes?: number;
+  memoryLimitBytes?: number;
 }
 
 export interface Image {

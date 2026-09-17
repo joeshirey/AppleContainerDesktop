@@ -64,12 +64,9 @@ fn text_output(v: Value) -> String {
 
 /// Host paths this container bind-mounts that no longer exist.
 ///
-/// A mount with no host path at all (a volume, a tmpfs) is not a bind mount
-/// and is never reported. The CLI spells that absence two ways depending on the
-/// mount type — the key missing, or the key present and empty — so a blank
-/// source has to be discarded before the path check. It never exists on disk,
-/// so letting one through badges the container MOUNT MISSING and lists it with
-/// an empty path.
+/// Only bind mounts have host directories to check. In 1.4.1 a tmpfs source is
+/// "tmpfs", and a named volume source is its backing disk image. Neither is a
+/// bind directory. Older records may omit the type or leave the source blank.
 fn missing_bind_mounts(container: &Value) -> Vec<String> {
     let mounts = container
         .get("configuration")
@@ -82,6 +79,10 @@ fn missing_bind_mounts(container: &Value) -> Vec<String> {
 
     mounts
         .iter()
+        .filter(|m| {
+            let kind = m.get("type");
+            !kind.is_some_and(|t| t.get("tmpfs").is_some() || t.get("volume").is_some())
+        })
         .filter_map(|m| {
             m.get("source")
                 .or_else(|| m.get("hostPath"))
@@ -731,6 +732,17 @@ mod tests {
             { "destination": "/data", "source": "   " },
         ]));
         assert!(missing_bind_mounts(&c).is_empty());
+    }
+
+    #[test]
+    fn typed_mounts_only_check_bind_directories() {
+        let c = with_mounts(json!([
+            { "destination": "/run", "source": "tmpfs", "type": { "tmpfs": {} } },
+            { "destination": "/data", "source": GONE, "type": { "volume": { "name": "data" } } },
+            { "destination": "/present", "source": REAL, "type": { "virtiofs": {} } },
+            { "destination": "/missing", "source": GONE, "type": { "virtiofs": {} } },
+        ]));
+        assert_eq!(missing_bind_mounts(&c), vec![GONE.to_string()]);
     }
 
     // The list used to drop these containers entirely, which left them

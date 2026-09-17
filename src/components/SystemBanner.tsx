@@ -5,18 +5,21 @@ export function SystemBanner({
   error,
   onStart,
   onStop,
+  onRetry,
 }: {
-  /** `null` while the first status check is still in flight. */
+  /** `null` while checking or when the check failed. */
   running: boolean | null;
   error?: string | null;
   onStart: () => void;
   onStop: () => void;
+  onRetry?: () => void;
 }) {
   return (
     <>
       {running === null ? (
         <div className={styles.bannerChecking}>
-          <span>Checking container system…</span>
+          <span>{error ? "Container system status is unavailable." : "Checking container system…"}</span>
+          {error && onRetry && <button className={styles.btn} onClick={onRetry}>Retry</button>}
         </div>
       ) : running ? (
         <div className={styles.bannerRunning}>
