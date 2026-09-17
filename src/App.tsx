@@ -33,13 +33,18 @@ export default function App() {
   const [sysRunning, setSysRunning] = useState<boolean | null>(null);
   const [sysError, setSysError] = useState<string | null>(null);
 
-  useEffect(() => {
-    checkSystemStatus()
-      // The call succeeds on a stopped system too, returning a payload that
-      // says so — so the status field is what decides, not the fact it resolved.
-      .then(s => setSysRunning(s?.status?.toLowerCase() === "running"))
-      .catch(() => setSysRunning(false));
-  }, []);
+  async function refreshSystemStatus() {
+    setSysRunning(null);
+    setSysError(null);
+    try {
+      const status = await checkSystemStatus();
+      setSysRunning(status.status === "running");
+    } catch (e) {
+      setSysError(`Could not check the container system: ${message(e)}`);
+    }
+  }
+
+  useEffect(() => { void refreshSystemStatus(); }, []);
 
   async function handleStart() {
     setSysError(null);
@@ -71,6 +76,7 @@ export default function App() {
             error={sysError}
             onStart={handleStart}
             onStop={handleStop}
+            onRetry={refreshSystemStatus}
           />
           <main className={styles.main}><ActiveView section={active} /></main>
         </div>

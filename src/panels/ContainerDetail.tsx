@@ -6,6 +6,7 @@ import { LogsPanel } from "./LogsPanel";
 import { ExecPanel } from "./ExecPanel";
 import { ContainerSettings } from "./ContainerSettings";
 import styles from "./ContainerDetail.module.css";
+import { displayStats, type StatsSample } from "../lib/stats";
 
 type Tab = "info" | "logs" | "exec" | "settings";
 
@@ -21,17 +22,31 @@ export function ContainerDetail({ container, onAction, onRemove }: { container: 
   useEffect(() => {
     if (!isRunning || tab !== "info") return;
     let live = true;
-    // The pending flag hides whatever is in `stats` while the call is in flight, so
-    // this clear is only visible when the new call fails: the catch below swallows
-    // the error, and without the clear the panel would settle back onto the numbers
-    // belonging to the container you were looking at before, under the new name.
+    let timer: ReturnType<typeof setTimeout>;
+    let previous: StatsSample | undefined;
     setStats(null);
     setStatsPending(true);
-    getStats(container.id)
-      .then(s => { if (live) setStats(s); })
-      .catch(() => {})
-      .finally(() => { if (live) setStatsPending(false); });
-    return () => { live = false; };
+    async function sample() {
+      try {
+        const result = await getStats(container.id);
+        if (!live) return;
+        const current = { stats: result ?? {}, time: performance.now() };
+        setStats(displayStats(current, previous));
+        previous = current;
+      } catch {
+        if (!live) return;
+        previous = undefined;
+        setStats(null);
+      } finally {
+        if (live) {
+          setStatsPending(false);
+          // Schedule after completion so slow CLI calls never overlap.
+          timer = setTimeout(sample, 5000);
+        }
+      }
+    }
+    void sample();
+    return () => { live = false; clearTimeout(timer); };
   }, [container.id, tab, isRunning]);
 
   useEffect(() => { setConfirmRemove(false); }, [container.id]);

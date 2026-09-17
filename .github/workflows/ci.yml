@@ -60,9 +60,9 @@ jobs:
         run: cargo clippy --all-targets --locked -- -D warnings
         working-directory: src-tauri
 
-      # The `container` CLI is deliberately absent on the runner. No test needs
-      # it: the one test that shells out asserts on the error path, which a
-      # missing binary satisfies.
+      # Default tests use captured CLI fixtures and tolerate a missing binary.
+      # The opt-in live smoke test stays ignored here; it needs a running
+      # container service with virtualization. See docs/container-1.4.1.md.
       - name: cargo test
         run: cargo test --locked
         working-directory: src-tauri

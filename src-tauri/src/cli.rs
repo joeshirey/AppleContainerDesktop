@@ -1,5 +1,5 @@
 use serde_json::Value;
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, Command, Output, Stdio};
 
 #[derive(Debug)]
 pub struct CmdError {
@@ -51,14 +51,58 @@ pub fn run_cmd(args: &[&str]) -> Result<Value, CmdError> {
             message: format!("CLI not found: {e}"),
         })?;
 
-    if !out.status.success() {
-        return Err(CmdError {
-            message: String::from_utf8_lossy(&out.stderr).trim().to_string(),
-        });
-    }
+    parse_output(args, &out)
+}
 
+/// Status uses exit code 1 for an unavailable service, with the reason in
+/// stdout JSON. Other commands must still fail on every nonzero exit code.
+fn parse_output(args: &[&str], out: &Output) -> Result<Value, CmdError> {
+    let needs_json = needs_json(args);
     let stdout = String::from_utf8_lossy(&out.stdout);
     let trimmed = stdout.trim();
+    let system_status = args.starts_with(&["system", "status"]);
+    let payload = if system_status {
+        serde_json::from_str::<Value>(trimmed).ok()
+    } else {
+        None
+    };
+
+    if system_status && out.status.code() == Some(1) {
+        if let Some(value) = &payload {
+            if matches!(
+                value.get("status").and_then(Value::as_str),
+                Some("not running" | "unregistered")
+            ) {
+                return Ok(value.clone());
+            }
+        }
+    }
+
+    if !out.status.success() {
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let detail = if !stderr.trim().is_empty() {
+            stderr.trim().to_string()
+        } else if !trimmed.is_empty() {
+            trimmed.to_string()
+        } else {
+            format!("container command failed ({})", out.status)
+        };
+        return Err(CmdError { message: detail });
+    }
+
+    if system_status {
+        return payload
+            .filter(|value| {
+                matches!(
+                    value.get("status").and_then(Value::as_str),
+                    Some("running" | "not running" | "unregistered")
+                )
+            })
+            .ok_or_else(|| CmdError {
+                message: "Invalid container system status response".to_string(),
+            });
+    }
+
     if trimmed.is_empty() {
         return if needs_json {
             Ok(Value::Array(vec![]))
@@ -100,6 +144,93 @@ pub fn spawn_cmd(args: &[String]) -> Result<Child, CmdError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::os::unix::process::ExitStatusExt;
+
+    fn output(code: i32, stdout: &str, stderr: &str) -> Output {
+        Output {
+            status: std::process::ExitStatus::from_raw(code << 8),
+            stdout: stdout.as_bytes().to_vec(),
+            stderr: stderr.as_bytes().to_vec(),
+        }
+    }
+
+    #[test]
+    fn stopped_system_status_preserves_json_on_exit_one() {
+        for status in ["unregistered", "not running"] {
+            let payload = serde_json::json!({ "status": status });
+            let result =
+                parse_output(&["system", "status"], &output(1, &payload.to_string(), "")).unwrap();
+            assert_eq!(result, payload);
+        }
+    }
+
+    #[test]
+    fn status_exception_does_not_hide_other_failures() {
+        for (args, code, payload) in [
+            (vec!["system", "status"], 2, r#"{"status":"unregistered"}"#),
+            (vec!["system", "status"], 1, r#"{"status":"running"}"#),
+            (vec!["system", "status"], 1, r#"{"status":"unknown"}"#),
+            (vec!["ls"], 1, r#"{"status":"not running"}"#),
+            (vec!["system", "start"], 1, r#"{"status":"unregistered"}"#),
+        ] {
+            assert!(parse_output(&args, &output(code, payload, "failed")).is_err());
+        }
+    }
+
+    #[test]
+    fn invalid_status_payloads_are_errors_even_on_success() {
+        for payload in ["", "[]", "{}", "not json", r#"{"status":"unknown"}"#] {
+            assert!(parse_output(&["system", "status"], &output(0, payload, "")).is_err());
+        }
+    }
+
+    #[test]
+    fn failed_commands_always_have_a_useful_message() {
+        assert_eq!(
+            parse_output(&["ls"], &output(1, "stdout detail", "stderr detail"))
+                .unwrap_err()
+                .message,
+            "stderr detail"
+        );
+        assert_eq!(
+            parse_output(&["ls"], &output(1, "stdout detail", ""))
+                .unwrap_err()
+                .message,
+            "stdout detail"
+        );
+        assert!(parse_output(&["ls"], &output(1, "", ""))
+            .unwrap_err()
+            .message
+            .contains("exit status: 1"));
+    }
+
+    #[test]
+    fn legacy_running_status_is_still_supported() {
+        let payload =
+            r#"{"status":"running","appRoot":"/tmp/container","apiServerVersion":"1.2.2"}"#;
+        let result = parse_output(&["system", "status"], &output(0, payload, "")).unwrap();
+        assert_eq!(result["status"], "running");
+    }
+
+    #[test]
+    fn expanded_running_status_is_supported() {
+        let payload = include_str!("../../src/test/fixtures/container-1.4.1/system-running.json");
+        let result = parse_output(&["system", "status"], &output(0, payload, "")).unwrap();
+        assert_eq!(result["status"], "running");
+        assert_eq!(result["client"]["version"], "1.4.1");
+        assert_eq!(result["server"]["version"], "1.4.1");
+    }
+
+    #[test]
+    fn json_paths_accept_both_slash_encodings() {
+        for payload in [
+            r#"[{"source":"/tmp/data"}]"#,
+            r#"[{"source":"\/tmp\/data"}]"#,
+        ] {
+            let result = parse_output(&["ls"], &output(0, payload, "")).unwrap();
+            assert_eq!(result[0]["source"], "/tmp/data");
+        }
+    }
 
     #[test]
     fn run_cmd_errors_on_unknown_subcommand() {

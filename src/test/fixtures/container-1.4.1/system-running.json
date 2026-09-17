@@ -1,0 +1,29 @@
+{
+  "client": {
+    "appName": "container",
+    "build": "release",
+    "commit": "unspecified",
+    "version": "1.4.1"
+  },
+  "host": {
+    "architecture": "arm64",
+    "cpus": 14,
+    "operatingSystem": "Version 27.0 (Build 26A428)"
+  },
+  "paths": {
+    "appRoot": "/Users/test/Library/Application Support/com.apple.container/",
+    "installRoot": "/opt/homebrew/Cellar/container/1.4.1/"
+  },
+  "resources": {
+    "containersRunning": 1,
+    "containersTotal": 5,
+    "images": 17
+  },
+  "server": {
+    "appName": "container-apiserver",
+    "build": "release",
+    "commit": "unspecified",
+    "version": "1.4.1"
+  },
+  "status": "running"
+}

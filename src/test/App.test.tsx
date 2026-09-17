@@ -48,15 +48,32 @@ describe("App system banner", () => {
   // saying so. Treating "the call resolved" as "the system is up" reports a
   // stopped system as running.
   it("reports a stopped system when the status says it is not running", async () => {
-    mockStatus.mockResolvedValue({ status: "stopped" });
+    mockStatus.mockResolvedValue({ status: "not running" });
     render(<App />);
     expect(await screen.findByText(/container system is not running/i)).toBeInTheDocument();
   });
 
-  it("treats a failed status check as a stopped system", async () => {
+  it("keeps a failed status check unknown and displays its reason", async () => {
     mockStatus.mockRejectedValue("connection refused");
     render(<App />);
+    expect(await screen.findByText(/container system status is unavailable/i)).toBeInTheDocument();
+    expect(screen.getByRole("alert")).toHaveTextContent("connection refused");
+    expect(screen.queryByRole("button", { name: "Start Containers" })).not.toBeInTheDocument();
+  });
+
+  it("reports an unregistered service as stopped without an error", async () => {
+    mockStatus.mockResolvedValue({ status: "unregistered" });
+    render(<App />);
     expect(await screen.findByText(/container system is not running/i)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("retries a failed status check and clears its error", async () => {
+    mockStatus.mockRejectedValueOnce("CLI not found");
+    render(<App />);
+    await userEvent.click(await screen.findByRole("button", { name: "Retry" }));
+    expect(await screen.findByText(/container system is running/i)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
   });
 
   it("surfaces the reason when starting the system fails", async () => {
