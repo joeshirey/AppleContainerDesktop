@@ -62,7 +62,7 @@ jobs:
 
       # Default tests use captured CLI fixtures and tolerate a missing binary.
       # The opt-in live smoke test stays ignored here; it needs a running
-      # container service with virtualization. See docs/container-1.4.1.md.
+      # container service with virtualization. See docs/container-1.5.0.md.
       - name: cargo test
         run: cargo test --locked
         working-directory: src-tauri

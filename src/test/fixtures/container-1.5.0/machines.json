@@ -1,0 +1,12 @@
+[
+  {
+    "status": "running",
+    "id": "compat-test-vm",
+    "createdDate": "2026-09-30T22:56:30Z",
+    "ipAddress": "192.168.64.2",
+    "default": true,
+    "cpus": 2,
+    "memory": 2147483648,
+    "diskSize": 1169326080
+  }
+]

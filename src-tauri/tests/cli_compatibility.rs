@@ -1,38 +1,59 @@
 use applecontainerdesktop_lib::{builder, cli::run_cmd, containers::*, recreate};
 use serde_json::{json, Value};
 
+/// CLI versions with captured fixtures and a passing live smoke test.
+const SUPPORTED_VERSIONS: [&str; 2] = ["1.4.1", "1.5.0"];
+
 #[test]
-fn recreation_preserves_captured_1_4_1_configuration() {
-    let raw: Value = serde_json::from_str(include_str!(
-        "../../src/test/fixtures/container-1.4.1/containers.json"
-    ))
-    .unwrap();
-    let plan = recreate::build_run_args(recreate::config_of(&raw).unwrap(), &json!({"cpus": "2"}));
-    for pair in [
-        ["--cpus", "2"],
-        ["--memory", "536870912"],
-        ["--tmpfs", "/scratch"],
-        ["-v", "/tmp/acd-compat/bind:/bind:ro"],
-        ["-v", "compat-test:/data"],
-        ["-p", "127.0.0.1:18741:8080"],
-        ["-e", "COMPAT_TEST=preserved"],
-        ["-l", "compat.version=1.4.1"],
-        ["--network", "compat-test,mtu=1280"],
-        ["--entrypoint", "/bin/sh"],
-        ["-w", "/tmp"],
+fn recreation_preserves_captured_configuration() {
+    for (version, payload) in [
+        (
+            "1.4.1",
+            include_str!("../../src/test/fixtures/container-1.4.1/containers.json"),
+        ),
+        (
+            "1.5.0",
+            include_str!("../../src/test/fixtures/container-1.5.0/containers.json"),
+        ),
     ] {
-        assert!(plan.args.windows(2).any(|w| w == pair), "missing {pair:?}");
+        let raw: Value = serde_json::from_str(payload).unwrap();
+        let plan =
+            recreate::build_run_args(recreate::config_of(&raw).unwrap(), &json!({"cpus": "2"}));
+        let label = format!("compat.version={version}");
+        for pair in [
+            ["--cpus", "2"],
+            ["--memory", "536870912"],
+            ["--tmpfs", "/scratch"],
+            ["-v", "/tmp/acd-compat/bind:/bind:ro"],
+            ["-v", "compat-test:/data"],
+            ["-p", "127.0.0.1:18741:8080"],
+            ["-e", "COMPAT_TEST=preserved"],
+            ["-l", &label],
+            ["--network", "compat-test,mtu=1280"],
+            ["--entrypoint", "/bin/sh"],
+            ["-w", "/tmp"],
+        ] {
+            assert!(
+                plan.args.windows(2).any(|w| w == pair),
+                "{version}: missing {pair:?}"
+            );
+        }
+        assert!(plan.unsupported.is_empty(), "{version}");
     }
-    assert!(plan.unsupported.is_empty());
 }
 
-/// Opt-in: needs a running container 1.4.1 service and Apple silicon. Creates
-/// only uniquely named disposable resources; never prunes existing resources.
+/// Opt-in: needs a running container service at a supported version and Apple
+/// silicon. Creates only uniquely named disposable resources; never prunes
+/// existing resources.
 #[test]
-#[ignore = "requires a live container service; see docs/container-1.4.1.md"]
-fn live_1_4_1_smoke() {
+#[ignore = "requires a live container service; see docs/container-1.5.0.md"]
+fn live_smoke() {
     let version = run_cmd(&["--version"]).unwrap();
-    assert!(version.as_str().unwrap().contains("version 1.4.1 "));
+    let version = SUPPORTED_VERSIONS
+        .into_iter()
+        .find(|v| version.as_str().unwrap().contains(&format!("version {v} ")))
+        .unwrap_or_else(|| panic!("unsupported CLI: {version}"));
+    eprintln!("Testing container {version}");
     assert_eq!(check_system_status().unwrap()["status"], "running");
     let name = format!(
         "acd-smoke-{}",
@@ -84,7 +105,7 @@ fn live_1_4_1_smoke() {
         "-e",
         "COMPAT_TEST=preserved",
         "-l",
-        "compat.version=1.4.1",
+        &format!("compat.version={version}"),
         "-w",
         "/tmp",
         "--entrypoint",
@@ -199,7 +220,7 @@ fn live_1_4_1_smoke() {
         .unwrap();
     assert_eq!(vm["cpus"], 2);
     assert_eq!(vm["memory"], 2147483648_u64);
-    // 1.4.1 can retain an uninitialized snapshot after first-time user setup.
+    // 1.4.1 and 1.5.0 can retain an uninitialized snapshot after first-time user setup.
     // A fresh boot loads the persisted setup state. Without this, machine run
     // may try to initialize with a TTY despite a noninteractive command.
     // Keep this upstream limitation explicit; never replay user commands.
