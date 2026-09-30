@@ -214,11 +214,21 @@ mod tests {
 
     #[test]
     fn expanded_running_status_is_supported() {
-        let payload = include_str!("../../src/test/fixtures/container-1.4.1/system-running.json");
-        let result = parse_output(&["system", "status"], &output(0, payload, "")).unwrap();
-        assert_eq!(result["status"], "running");
-        assert_eq!(result["client"]["version"], "1.4.1");
-        assert_eq!(result["server"]["version"], "1.4.1");
+        for (version, payload) in [
+            (
+                "1.4.1",
+                include_str!("../../src/test/fixtures/container-1.4.1/system-running.json"),
+            ),
+            (
+                "1.5.0",
+                include_str!("../../src/test/fixtures/container-1.5.0/system-running.json"),
+            ),
+        ] {
+            let result = parse_output(&["system", "status"], &output(0, payload, "")).unwrap();
+            assert_eq!(result["status"], "running");
+            assert_eq!(result["client"]["version"], version);
+            assert_eq!(result["server"]["version"], version);
+        }
     }
 
     #[test]

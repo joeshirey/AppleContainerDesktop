@@ -27,7 +27,7 @@ app does, you could have typed at the prompt yourself.
 |---|---|
 | **Mac** | Apple silicon. `container` does not run on Intel. |
 | **macOS** | 26 or newer. Apple does not support `container` below that. |
-| **`container` CLI** | 1.4.1 recommended and tested. |
+| **`container` CLI** | 1.5.0 recommended and tested. 1.4.1 is also supported. |
 | **To build** | Node.js 20+ and Rust via [rustup](https://rustup.rs). |
 
 Get the CLI from [apple/container releases](https://github.com/apple/container/releases),
@@ -229,7 +229,7 @@ A banner across the top tells you whether the container system is running and of
 start or stop it. If the status check fails, it shows the reason and offers a retry.
 
 Compatibility notes and the live test procedure are in
-[docs/container-1.4.1.md](docs/container-1.4.1.md).
+[docs/container-1.5.0.md](docs/container-1.5.0.md).
 
 ## Development
 

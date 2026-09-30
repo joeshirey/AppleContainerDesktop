@@ -1,11 +1,28 @@
-# Container 1.4.1 compatibility
+# Container 1.5.0 compatibility
 
 The desktop app invokes the installed CLI; it does not embed Apple's Swift packages.
-Use `container --version` to confirm the CLI version. Version 1.4.1 is the tested and
-recommended version. Legacy JSON shapes remain covered where supported, but older CLI
-releases have not been rerun through the live suite for this update.
+Use `container --version` to confirm the CLI version. Version 1.5.0 is the tested and
+recommended version; 1.4.1 remains supported. Legacy JSON shapes remain covered where
+supported, but releases before 1.4.1 have not been rerun through the live suite.
 
-## Changes
+## 1.5.0
+
+No app code changes were needed. The JSON the app reads from `system status`, `ls`,
+`stats`, `image ls`, `machine ls`, `volume ls`, `network ls`, and `builder status` has
+the same structure as 1.4.1. Unknown commands still exit nonzero (now 64 with a longer
+message), so the error path is unchanged.
+
+Apple's [1.5.0 release notes](https://github.com/apple/container/releases/tag/1.5.0)
+list one breaking CLI change, the removal of `container k8s start`. The app does not
+use the Kubernetes plugin. The other changes (commands running with an empty image
+entrypoint, egress after localhost DNS changes, a kubeconfig security fix) need no app
+changes.
+
+The captured `image ls` output lists every platform variant of the multi-arch Alpine
+index, including `unknown/unknown` attestation entries. The app still shows the arm64
+variant's size.
+
+## 1.4.1
 
 - Recognize tmpfs and named-volume mount types before checking host bind directories.
   Both legacy blank tmpfs sources and the current `"tmpfs"` source work.
@@ -42,22 +59,23 @@ cargo test --locked
 cargo build --locked
 ```
 
-Fixtures under `src/test/fixtures/container-1.4.1/` were captured from the installed
-1.4.1 CLI on Apple silicon. Personal paths and disposable resource names are replaced
+Fixtures under `src/test/fixtures/container-1.5.0/` and
+`src/test/fixtures/container-1.4.1/` were captured from the installed CLI of each
+version on Apple silicon. The frontend and Rust fixture tests run against both. Personal paths and disposable resource names are replaced
 with test values. They cover system status, containers, stats, images, machines,
 volumes, networks, and an existing stopped builder. Container and machine fixtures
 come from disposable Alpine resources. The fixture tests run without the CLI in CI.
 
 ## Live smoke test
 
-Use an Apple silicon Mac with container 1.4.1, virtualization support, network access
+Use an Apple silicon Mac with container 1.5.0 or 1.4.1, virtualization support, network access
 for image pulls, and enough memory for the test container, machine, and builder.
 After building the frontend:
 
 ```sh
 container system start
 cd src-tauri
-cargo test --locked --test cli_compatibility live_1_4_1_smoke -- --ignored --nocapture
+cargo test --locked --test cli_compatibility live_smoke -- --ignored --nocapture
 ```
 
 The test exercises the app's Rust command functions for pull, container lifecycle,
@@ -77,16 +95,23 @@ and the settings preview and recreation flow using a disposable container.
 
 ## Upstream machine initialization limitation
 
-In 1.4.1, the first noninteractive `machine run` immediately after creating a machine
-can fail with `Operation not supported by device` or `Inappropriate ioctl for device`.
+In 1.4.1 and 1.5.0, the first noninteractive `machine run` immediately after creating a
+machine can fail with `Operation not supported by device` or `Inappropriate ioctl for device`.
 The CLI's [boot helper](https://github.com/apple/container/blob/1.4.1/Sources/ContainerCommands/Machine/MachineHelpers.swift)
 requests a terminal when its snapshot still reports first-time user setup as incomplete.
 Stopping the newly created machine before its first shell command lets the next boot
-load the persisted setup state. This workaround passed the live test; the smoke test
-includes that stop explicitly. The app surfaces CLI errors and does not automatically
+load the persisted setup state. The problem still occurs in 1.5.0. This workaround
+passed the live test; the smoke test includes that stop explicitly. The app surfaces CLI errors and does not automatically
 retry shell commands, which could execute user work twice.
 
 ## Validation record
+
+Validated September 30, 2026 on Apple silicon, macOS 27.0, container client/server 1.5.0:
+303 frontend tests, 117 default Rust tests, formatting, Clippy with warnings denied,
+frontend/native builds, and the opt-in live smoke test passed. The live test includes
+the machine initialization workaround above.
+
+Earlier record for 1.4.1:
 
 Validated September 17, 2026 on Apple silicon, macOS 27.0, container client/server 1.4.1:
 295 frontend tests, 117 default Rust tests, formatting, Clippy with warnings denied,
