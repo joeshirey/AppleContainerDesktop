@@ -125,20 +125,20 @@ export function ImagesView() {
         {loading && <div className={styles.msg}>Loading…</div>}
         {!loading && filtered.length === 0 && <div className={styles.msg}>No images found.</div>}
         {filtered.map(img => (
-          <div key={img.id} className={styles.row}>
+          <div key={img.reference} className={styles.row}>
             <span className={styles.name}>{img.repository}</span>
             <span className={styles.mono}>{img.tag}</span>
             <span className={styles.meta}>{img.size}</span>
             <span className={styles.meta}>{formatDate(img.created)}</span>
             <div className={styles.actions}>
               <button className={styles.actBtn} onClick={() => setRunImage(img.reference)}>Run</button>
-              {confirmRemove === img.id ? (
+              {confirmRemove === img.reference ? (
                 <>
                   <button className={styles.actBtnDanger} onClick={() => handleRemove(img.reference)}>Confirm Remove</button>
                   <button className={styles.actBtn} onClick={() => setConfirmRemove(null)}>Cancel</button>
                 </>
               ) : (
-                <button className={styles.actBtnDanger} onClick={() => setConfirmRemove(img.id)}>Remove</button>
+                <button className={styles.actBtnDanger} onClick={() => setConfirmRemove(img.reference)}>Remove</button>
               )}
             </div>
           </div>

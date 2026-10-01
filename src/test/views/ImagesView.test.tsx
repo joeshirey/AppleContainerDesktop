@@ -105,6 +105,22 @@ describe("ImagesView", () => {
     await waitFor(() => expect(mockRemove).toHaveBeenCalledWith("docker.io/library/nginx:latest"));
   });
 
+  it("keeps two tags of the same image separate", async () => {
+    const errors = vi.spyOn(console, "error").mockImplementation(() => {});
+    mockList.mockResolvedValue([
+      { ...IMAGES[0], reference: "docker.io/library/alpine:latest", repository: "alpine", tag: "latest" },
+      { ...IMAGES[0], reference: "docker.io/library/alpine:3.24.1", repository: "alpine", tag: "3.24.1" },
+    ]);
+    render(<ImagesView />);
+    await waitFor(() => screen.getByText("3.24.1"));
+    await userEvent.click(screen.getAllByText("Remove")[1]);
+    expect(screen.getAllByText("Confirm Remove")).toHaveLength(1);
+    await userEvent.click(screen.getByText("Confirm Remove"));
+    await waitFor(() => expect(mockRemove).toHaveBeenCalledWith("docker.io/library/alpine:3.24.1"));
+    expect(errors).not.toHaveBeenCalledWith(expect.stringContaining("same key"), expect.anything());
+    errors.mockRestore();
+  });
+
   // N6: assert the modal is absent before the click so initialising showBuild
   // to true cannot survive undetected.
   it("opens the build modal", async () => {
