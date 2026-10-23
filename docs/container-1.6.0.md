@@ -1,9 +1,39 @@
-# Container 1.5.0 compatibility
+# Container 1.6.0 compatibility
 
 The desktop app invokes the installed CLI; it does not embed Apple's Swift packages.
-Use `container --version` to confirm the CLI version. Version 1.5.0 is the tested and
-recommended version; 1.4.1 remains supported. Legacy JSON shapes remain covered where
+Use `container --version` to confirm the CLI version. Version 1.6.0 is the tested and
+recommended version; 1.5.0 and 1.4.1 remain supported. Legacy JSON shapes remain covered where
 supported, but releases before 1.4.1 have not been rerun through the live suite.
+
+## 1.6.0
+
+No app code changes were needed. The JSON the app reads from `system status`, `ls`,
+`stats`, `image ls`, `machine ls`, `volume ls`, `network ls`, and `builder status` has
+the same structure as 1.5.0. Unknown commands still exit 64; the message now also lists
+the plugin search paths, so the error path is unchanged.
+
+Apple's [1.6.0 release notes](https://github.com/apple/container/releases/tag/1.6.0)
+list no breaking CLI changes. The ones that touch the app:
+
+- `container build` and `container builder` are now CLI plugins. The command lines,
+  flags, and `builder status` JSON the app uses are the same, so building and builder
+  start/stop work unchanged.
+- Built images are now stored under the fully qualified reference, so a build tagged
+  `myapp:latest` is listed as `docker.io/library/myapp:latest`. The image list already
+  shortens Docker Hub references for display, and removal uses the stored reference.
+  The live smoke test accepts either form.
+- `image ls` lists only the platform variants present locally rather than every entry
+  in a multi-arch index. The app still shows the arm64 variant's size.
+- The machine first-boot problem below did not reproduce in a spot check on 1.6.0.
+  The workaround stays in the smoke test because 1.4.1 and 1.5.0 still need it.
+
+The other changes (`container commit`, DNS aliases for network attachments,
+multi-worker Kubernetes clusters, two security fixes) need no app changes. The new
+commands are not exposed by this update.
+
+The captured `ls -a` output includes the stopped `buildkit` builder container, which
+the CLI has always listed. Earlier fixtures omitted it. The app's container list shows
+it too; that behavior predates 1.6.0.
 
 ## 1.5.0
 
@@ -59,16 +89,16 @@ cargo test --locked
 cargo build --locked
 ```
 
-Fixtures under `src/test/fixtures/container-1.5.0/` and
-`src/test/fixtures/container-1.4.1/` were captured from the installed CLI of each
-version on Apple silicon. The frontend and Rust fixture tests run against both. Personal paths and disposable resource names are replaced
+Fixtures under `src/test/fixtures/container-1.6.0/`, `src/test/fixtures/container-1.5.0/`,
+and `src/test/fixtures/container-1.4.1/` were captured from the installed CLI of each
+version on Apple silicon. The frontend and Rust fixture tests run against all three. Personal paths and disposable resource names are replaced
 with test values. They cover system status, containers, stats, images, machines,
 volumes, networks, and an existing stopped builder. Container and machine fixtures
 come from disposable Alpine resources. The fixture tests run without the CLI in CI.
 
 ## Live smoke test
 
-Use an Apple silicon Mac with container 1.5.0 or 1.4.1, virtualization support, network access
+Use an Apple silicon Mac with container 1.6.0, 1.5.0, or 1.4.1, virtualization support, network access
 for image pulls, and enough memory for the test container, machine, and builder.
 After building the frontend:
 
@@ -100,11 +130,20 @@ machine can fail with `Operation not supported by device` or `Inappropriate ioct
 The CLI's [boot helper](https://github.com/apple/container/blob/1.4.1/Sources/ContainerCommands/Machine/MachineHelpers.swift)
 requests a terminal when its snapshot still reports first-time user setup as incomplete.
 Stopping the newly created machine before its first shell command lets the next boot
-load the persisted setup state. The problem still occurs in 1.5.0. This workaround
+load the persisted setup state. The problem still occurs in 1.5.0; it did not reproduce
+in a spot check on 1.6.0. This workaround
 passed the live test; the smoke test includes that stop explicitly. The app surfaces CLI errors and does not automatically
 retry shell commands, which could execute user work twice.
 
 ## Validation record
+
+Validated October 23, 2026 on Apple silicon, macOS 27.0.1, container client/server 1.6.0:
+309 of 311 frontend tests, 117 default Rust tests, formatting, Clippy with warnings
+denied, frontend build, and the opt-in live smoke test passed. The two frontend
+failures are in `StatusDot.test.tsx`, fail the same way without the 1.6.0 changes, and
+are unrelated to the CLI.
+
+Earlier record for 1.5.0:
 
 Validated September 30, 2026 on Apple silicon, macOS 27.0, container client/server 1.5.0:
 303 frontend tests, 117 default Rust tests, formatting, Clippy with warnings denied,

@@ -2,11 +2,13 @@ import { describe, expect, it } from "vitest";
 import { displayStats } from "../../lib/stats";
 import stats141 from "../fixtures/container-1.4.1/stats.json";
 import stats150 from "../fixtures/container-1.5.0/stats.json";
+import stats160 from "../fixtures/container-1.6.0/stats.json";
 
-describe("1.4.1 and 1.5.0 resource counters", () => {
+describe("1.4.1 through 1.6.0 resource counters", () => {
   it.each([
     ["1.4.1", stats141, "3.78 MiB / 512.00 MiB"],
     ["1.5.0", stats150, "4.31 MiB / 512.00 MiB"],
+    ["1.6.0", stats160, "2.30 MiB / 512.00 MiB"],
   ])("shows memory from a real %s sample without inventing a CPU percentage", (_, stats, memory) => {
     const result = displayStats({ stats: stats[0], time: 1000 });
     expect(result.memory).toBe(memory);

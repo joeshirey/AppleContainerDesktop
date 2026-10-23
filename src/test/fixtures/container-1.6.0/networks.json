@@ -1,0 +1,37 @@
+[
+  {
+    "configuration": {
+      "creationDate": "2026-10-23T23:09:44Z",
+      "ipv4Subnet": "192.168.65.0/24",
+      "labels": {},
+      "mode": "nat",
+      "name": "compat-test",
+      "options": {},
+      "plugin": "container-network-vmnet"
+    },
+    "id": "compat-test",
+    "status": {
+      "ipv4Gateway": "192.168.65.1",
+      "ipv4Subnet": "192.168.65.0/24",
+      "ipv6Subnet": "fd0b:a00:6f19:1692::/64"
+    }
+  },
+  {
+    "configuration": {
+      "creationDate": "2026-10-23T22:03:18Z",
+      "labels": {
+        "com.apple.container.resource.role": "builtin"
+      },
+      "mode": "nat",
+      "name": "default",
+      "options": {},
+      "plugin": "container-network-vmnet"
+    },
+    "id": "default",
+    "status": {
+      "ipv4Gateway": "192.168.64.1",
+      "ipv4Subnet": "192.168.64.0/24",
+      "ipv6Subnet": "fd26:d34e:6375:9034::/64"
+    }
+  }
+]
