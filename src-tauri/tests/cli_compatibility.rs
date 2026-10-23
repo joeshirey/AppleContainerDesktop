@@ -2,7 +2,7 @@ use applecontainerdesktop_lib::{builder, cli::run_cmd, containers::*, recreate};
 use serde_json::{json, Value};
 
 /// CLI versions with captured fixtures and a passing live smoke test.
-const SUPPORTED_VERSIONS: [&str; 2] = ["1.4.1", "1.5.0"];
+const SUPPORTED_VERSIONS: [&str; 3] = ["1.4.1", "1.5.0", "1.6.0"];
 
 #[test]
 fn recreation_preserves_captured_configuration() {
@@ -14,6 +14,10 @@ fn recreation_preserves_captured_configuration() {
         (
             "1.5.0",
             include_str!("../../src/test/fixtures/container-1.5.0/containers.json"),
+        ),
+        (
+            "1.6.0",
+            include_str!("../../src/test/fixtures/container-1.6.0/containers.json"),
         ),
     ] {
         let raw: Value = serde_json::from_str(payload).unwrap();
@@ -46,7 +50,7 @@ fn recreation_preserves_captured_configuration() {
 /// silicon. Creates only uniquely named disposable resources; never prunes
 /// existing resources.
 #[test]
-#[ignore = "requires a live container service; see docs/container-1.5.0.md"]
+#[ignore = "requires a live container service; see docs/container-1.6.0.md"]
 fn live_smoke() {
     let version = run_cmd(&["--version"]).unwrap();
     let version = SUPPORTED_VERSIONS
@@ -220,7 +224,7 @@ fn live_smoke() {
         .unwrap();
     assert_eq!(vm["cpus"], 2);
     assert_eq!(vm["memory"], 2147483648_u64);
-    // 1.4.1 and 1.5.0 can retain an uninitialized snapshot after first-time user setup.
+    // 1.4.1 through 1.6.0 can retain an uninitialized snapshot after first-time user setup.
     // A fresh boot loads the persisted setup state. Without this, machine run
     // may try to initialize with a TTY despite a noninteractive command.
     // Keep this upstream limitation explicit; never replay user commands.
@@ -269,12 +273,15 @@ fn live_smoke() {
         dir.path().to_str().unwrap(),
     ])
     .unwrap();
+    // 1.6.0 stores built images under the fully qualified reference; earlier
+    // versions keep the tag as given.
+    let qualified = format!("docker.io/library/{tag}");
     assert!(list_images()
         .unwrap()
         .as_array()
         .unwrap()
         .iter()
-        .any(|i| i["configuration"]["name"] == tag));
+        .any(|i| i["configuration"]["name"] == tag || i["configuration"]["name"] == qualified));
     remove_image(tag.clone()).unwrap();
     eprintln!("Image pull, build, list and removal passed");
 }

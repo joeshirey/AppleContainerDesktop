@@ -1,0 +1,235 @@
+[
+  {
+    "configuration": {
+      "capAdd": [],
+      "capDrop": [],
+      "creationDate": "2026-10-23T23:09:45Z",
+      "dns": {
+        "nameservers": [],
+        "options": [],
+        "searchDomains": []
+      },
+      "id": "compat-test",
+      "image": {
+        "descriptor": {
+          "digest": "sha256:be2656061b536c1883c4034790e21d0a09c5aaaf51968b89368a3c0371ea2c9a",
+          "mediaType": "application/vnd.oci.image.index.v1+json",
+          "size": 9218
+        },
+        "reference": "docker.io/library/alpine:latest"
+      },
+      "initProcess": {
+        "arguments": [
+          "-c",
+          "echo ready; sleep 3600"
+        ],
+        "environment": [
+          "COMPAT_TEST=preserved",
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+        ],
+        "executable": "/bin/sh",
+        "rlimits": [],
+        "supplementalGroups": [],
+        "terminal": false,
+        "user": {
+          "id": {
+            "gid": 0,
+            "uid": 0
+          }
+        },
+        "workingDirectory": "/tmp"
+      },
+      "labels": {
+        "compat.version": "1.6.0"
+      },
+      "mounts": [
+        {
+          "destination": "/scratch",
+          "options": [],
+          "source": "tmpfs",
+          "type": {
+            "tmpfs": {}
+          }
+        },
+        {
+          "destination": "/bind",
+          "options": [
+            "ro"
+          ],
+          "source": "/tmp/acd-compat/bind",
+          "type": {
+            "virtiofs": {}
+          }
+        },
+        {
+          "destination": "/data",
+          "options": [],
+          "source": "/Users/test/Library/Application Support/com.apple.container/volumes/compat-test/volume.img",
+          "type": {
+            "volume": {
+              "cache": {
+                "on": {}
+              },
+              "format": "ext4",
+              "name": "compat-test",
+              "sync": {
+                "fsync": {}
+              }
+            }
+          }
+        }
+      ],
+      "networks": [
+        {
+          "network": "compat-test",
+          "options": {
+            "hostname": "compat-test",
+            "mtu": 1280
+          }
+        }
+      ],
+      "platform": {
+        "architecture": "arm64",
+        "os": "linux"
+      },
+      "publishedPorts": [
+        {
+          "containerPort": 8080,
+          "count": 1,
+          "hostAddress": "127.0.0.1",
+          "hostPort": 18741,
+          "proto": "tcp"
+        }
+      ],
+      "publishedSockets": [],
+      "readOnly": false,
+      "resources": {
+        "cpuOverhead": 1,
+        "cpus": 1,
+        "memoryInBytes": 536870912
+      },
+      "rosetta": false,
+      "runtimeHandler": "container-runtime-linux",
+      "ssh": false,
+      "sysctls": {},
+      "useInit": false,
+      "virtualization": false
+    },
+    "id": "compat-test",
+    "status": {
+      "networks": [
+        {
+          "hostname": "compat-test",
+          "ipv4Address": "192.168.65.2/24",
+          "ipv4Gateway": "192.168.65.1",
+          "ipv6Address": "fd0b:a00:6f19:1692:f46e:cfff:fedf:29fa/64",
+          "macAddress": "f6:6e:cf:df:29:fa",
+          "mtu": 1280,
+          "network": "compat-test",
+          "variant": "reserved"
+        }
+      ],
+      "startedDate": "2026-10-23T23:09:45Z",
+      "state": "running"
+    }
+  },
+  {
+    "configuration": {
+      "capAdd": [
+        "ALL"
+      ],
+      "capDrop": [],
+      "creationDate": "2026-10-23T23:09:52Z",
+      "dns": {
+        "nameservers": [],
+        "options": [],
+        "searchDomains": []
+      },
+      "id": "buildkit",
+      "image": {
+        "descriptor": {
+          "digest": "sha256:ca27b4f564f2653207ef8f57ec7ba1653d11e7bbc51833503c243016ee65c2f8",
+          "mediaType": "application/vnd.oci.image.index.v1+json",
+          "size": 856
+        },
+        "reference": "ghcr.io/apple/container-builder-shim/builder:0.13.2"
+      },
+      "initProcess": {
+        "arguments": [
+          "--debug",
+          "--vsock"
+        ],
+        "environment": [
+          "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+          "BUILDKIT_SETUP_CGROUPV2_ROOT=1"
+        ],
+        "executable": "/usr/local/bin/container-builder-shim",
+        "rlimits": [],
+        "supplementalGroups": [],
+        "terminal": false,
+        "user": {
+          "id": {
+            "gid": 0,
+            "uid": 0
+          }
+        },
+        "workingDirectory": "/"
+      },
+      "labels": {
+        "com.apple.container.plugin": "builder",
+        "com.apple.container.resource.role": "builder"
+      },
+      "mounts": [
+        {
+          "destination": "/run",
+          "options": [],
+          "source": "",
+          "type": {
+            "tmpfs": {}
+          }
+        },
+        {
+          "destination": "/var/lib/container-builder-shim/exports",
+          "options": [],
+          "source": "/Users/test/Library/Application Support/com.apple.container/builder",
+          "type": {
+            "virtiofs": {}
+          }
+        }
+      ],
+      "networks": [
+        {
+          "network": "default",
+          "options": {
+            "hostname": "buildkit"
+          }
+        }
+      ],
+      "platform": {
+        "architecture": "arm64",
+        "os": "linux",
+        "variant": "v8"
+      },
+      "publishedPorts": [],
+      "publishedSockets": [],
+      "readOnly": false,
+      "resources": {
+        "cpuOverhead": 1,
+        "cpus": 2,
+        "memoryInBytes": 2147483648
+      },
+      "rosetta": true,
+      "runtimeHandler": "container-runtime-linux",
+      "ssh": false,
+      "sysctls": {},
+      "useInit": false,
+      "virtualization": false
+    },
+    "id": "buildkit",
+    "status": {
+      "networks": [],
+      "startedDate": "2026-10-23T23:09:53Z",
+      "state": "stopped"
+    }
+  }
+]

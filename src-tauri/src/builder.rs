@@ -94,6 +94,7 @@ mod tests {
         for payload in [
             include_str!("../../src/test/fixtures/container-1.4.1/builder.json"),
             include_str!("../../src/test/fixtures/container-1.5.0/builder.json"),
+            include_str!("../../src/test/fixtures/container-1.6.0/builder.json"),
         ] {
             let state = parse_state(&serde_json::from_str(payload).unwrap());
             assert!(state.exists);
