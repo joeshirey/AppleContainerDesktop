@@ -223,6 +223,10 @@ mod tests {
                 "1.5.0",
                 include_str!("../../src/test/fixtures/container-1.5.0/system-running.json"),
             ),
+            (
+                "1.6.0",
+                include_str!("../../src/test/fixtures/container-1.6.0/system-running.json"),
+            ),
         ] {
             let result = parse_output(&["system", "status"], &output(0, payload, "")).unwrap();
             assert_eq!(result["status"], "running");

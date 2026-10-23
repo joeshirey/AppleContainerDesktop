@@ -10,7 +10,7 @@ const versions = [...new Set(Object.keys(fixtures).map(path => path.split("/")[2
 const fixture = (version: string, name: string) => fixtures[`./fixtures/container-${version}/${name}.json`];
 
 it("covers every supported CLI version", () => {
-  expect(versions).toEqual(expect.arrayContaining(["1.4.1", "1.5.0"]));
+  expect(versions).toEqual(expect.arrayContaining(["1.4.1", "1.5.0", "1.6.0"]));
 });
 
 describe.each(versions)("captured container %s JSON", version => {
