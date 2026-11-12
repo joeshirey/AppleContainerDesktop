@@ -80,8 +80,6 @@ describe("ContainerDetail", () => {
 
   it("samples numeric counters repeatedly and stops polling on unmount", async () => {
     vi.useFakeTimers();
-    const clock = vi.spyOn(performance, "now");
-    clock.mockReturnValueOnce(1000).mockReturnValueOnce(6000);
     mock.mockResolvedValueOnce({ cpuUsageUsec: 1000, memoryUsageBytes: 1048576 })
       .mockResolvedValueOnce({ cpuUsageUsec: 2_501_000, memoryUsageBytes: 2097152 });
     const view = render(<ContainerDetail container={running} />);
@@ -97,7 +95,6 @@ describe("ContainerDetail", () => {
       expect(mock).toHaveBeenCalledTimes(2);
     } finally {
       view.unmount();
-      clock.mockRestore();
       vi.useRealTimers();
     }
   });
